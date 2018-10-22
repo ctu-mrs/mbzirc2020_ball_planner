@@ -14,8 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 catkin_package(
-   INCLUDE_DIRS include
-  #  LIBRARIES balloon_planner
+  INCLUDE_DIRS include
+  LIBRARIES BalloonPlanner
   CATKIN_DEPENDS
   #  DEPENDS system_lib
   )
@@ -32,14 +32,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS})
 
 ## Declare a C++ executable
-add_library(balloon_planner
+add_library(BalloonPlanner
   src/BalloonPlanner.cpp)
 
-add_dependencies(balloon_planner
+add_dependencies(BalloonPlanner
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(balloon_planner
+target_link_libraries(BalloonPlanner
   ${catkin_LIBRARIES}
   )

@@ -2,10 +2,14 @@
 
   <arg name="uav_name" default="$(optenv UAV_NAME uav1)"/>
   <arg name="debug" default="false" />
+  <arg name="print_debug" default="true" />
 
   <arg unless="$(arg debug)" name="launch_prefix" value=""/>
   <arg     if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
 
+  <group if="$(arg print_debug)">
+  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find balloon_planner)/config/rosconsole/debug.conf"/>
+</group>
   <group ns="$(arg uav_name)">
 
     <node pkg="nodelet" type="nodelet" name="balloon_planner" args="standalone balloon_planner/BalloonPlanner" output="screen" launch-prefix="$(arg launch_prefix)" >
@@ -14,7 +18,7 @@
       <!-- <rosparam file="$(find balloon_planner)/config/simulation.yaml" command="load" /> -->
 
       <!-- Subscribers -->
-      <remap from="~cloud_balloon_in" to="balloon_localize/cloud" />
+      <remap from="~balloon_cloud_in" to="balloon_detect/detected_balloons" />
 
       <!-- Publishers -->
       <remap from="~odom_balloon_out" to="odom_balloon_out" />

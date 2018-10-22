@@ -14,12 +14,16 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
+//tf2
+#include <tf2_ros/transform_broadcaster.h>
+
+
 // Sensor msgs
 #include <sensor_msgs/PointCloud.h>
 
 // Geometry msgs
 /* #include <geometry_msgs/Point32.h> */
-/* #include <geometry_msgs/TransformStamped.h> */
+#include <geometry_msgs/TransformStamped.h>
 
 // Nav msgs
 #include <nav_msgs/Odometry.h>
@@ -35,6 +39,7 @@
 // std
 #include <string>
 #include <mutex>
+#include <float.h>
 
 //}
 
@@ -48,14 +53,27 @@ class BalloonPlanner : public nodelet::Nodelet {
 public:
   virtual void onInit();
 
-public:
-  bool m_is_initialized = false;
-
 private:
-  ros::Subscriber m_sub_cloud_balloon_;
+  bool m_is_initialized = false;
+  
+  std::string m_closest_balloon_frame_;
 
-  ros::Publisher m_pub_odom_balloon_;
-
+  /* ROS //{ */
+  
+  private:
+  
+    // publishers
+    ros::Subscriber m_sub_cloud_balloon_;
+  
+    //subscribers
+    ros::Publisher m_pub_odom_balloon_;
+  
+    //tranforms
+    tf2_ros::TransformBroadcaster m_br_;
+  
+  
+  //}
+  
 private:
   mrs_lib::Profiler* m_profiler;
 
@@ -83,6 +101,7 @@ private:
 
   //}
 
+pcl::PointCloud<pcl::PointXYZ>::iterator getClosestPt(const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_in);
 };
 
 
