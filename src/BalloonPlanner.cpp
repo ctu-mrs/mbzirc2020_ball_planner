@@ -73,7 +73,7 @@ void BalloonPlanner::callbackBalloonCloud(const pcl::PointCloud<pcl::PointXYZ>::
 
   mrs_lib::Routine profiler_routine = m_profiler->createRoutine("callbackBalloonCloud");
 
-  ROS_INFO("[BalloonPlanner]: balloon cloud size: %d", msg->size());
+  ROS_INFO("[BalloonPlanner]: balloon cloud size: %lu", msg->size());
 
 }
 
