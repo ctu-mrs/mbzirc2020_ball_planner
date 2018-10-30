@@ -48,14 +48,6 @@ void BalloonPlanner::onInit() {
 
   //}
 
-  /* /1* dynamic reconfigure //{ *1/ */
-
-  /* /1* reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh)); *1/ */
-  /* /1* ReconfigureServer::CallbackType f = boost::bind(&CvDepth::callbackReconfigure, this, _1, _2); *1/ */
-  /* /1* reconfigure_server_->setCallback(f); *1/ */
-
-  /* //} */
-
   m_is_initialized = true;
 
   ROS_INFO("[%s]: initialized", m_node_name.c_str());
