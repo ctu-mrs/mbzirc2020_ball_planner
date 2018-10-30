@@ -8,9 +8,14 @@ set(CMAKE_CXX_FLAGS "-std=c++17 -Wall -O0 -g")
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  dynamic_reconfigure
   mrs_msgs
   mrs_lib
   pcl_ros
+  )
+
+generate_dynamic_reconfigure_options(
+  config/planning_params.cfg
   )
 
 catkin_package(
