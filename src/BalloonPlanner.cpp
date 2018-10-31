@@ -37,6 +37,8 @@ void BalloonPlanner::onInit()
   mrs_lib::ParamLoader pl(nh, m_node_name);
 
   double planning_period = pl.load_param2<double>("planning_period");
+  double lkf_dt = pl.load_param2<double>("lkf_dt", lkf_dt);
+  pl.load_param("world_frame", m_world_frame, std::string("local_origin"));
 
   if (!pl.loaded_successfully())
   {
@@ -57,7 +59,7 @@ void BalloonPlanner::onInit()
   /* timers  //{ */
 
   m_main_loop_timer = nh.createTimer(ros::Duration(planning_period), &BalloonPlanner::main_loop, this);
-  m_lkf_update_timer = nh.createTimer(ros::Duration(m_lkf_dt), &BalloonPlanner::lkf_update, this);
+  m_lkf_update_timer = nh.createTimer(ros::Duration(lkf_dt), &BalloonPlanner::lkf_update, this);
 
   //}
 

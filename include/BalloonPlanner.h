@@ -76,7 +76,6 @@ namespace balloon_planner
       // --------------------------------------------------------------
 
       /* Parameters, loaded from ROS //{ */
-      double m_lkf_dt;
       std::string m_world_frame;
       //}
 
