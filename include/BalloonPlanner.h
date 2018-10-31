@@ -253,9 +253,9 @@ namespace balloon_planner
       //}
       
       /* Definitions of the LKF (consts, typedefs, etc.) //{ */
-      static const int c_n_states = 3;
-      static const int c_n_inputs = 0;
-      static const int c_n_measurements = 3;
+      static constexpr int c_n_states = 3;
+      static constexpr int c_n_inputs = 0;
+      static constexpr int c_n_measurements = 3;
 
       typedef Eigen::Matrix<double, c_n_states, 1> lkf_x_t;
       typedef Eigen::Matrix<double, c_n_inputs, 1> lkf_u_t;
@@ -301,7 +301,11 @@ namespace balloon_planner
         const lkf_R_t R; // depends on the measured dt, so leave blank for now
         const lkf_Q_t Q; // depends on the measurement, so leave blank for now
       
-        lkfs.emplace_back(m_last_lkf_id, c_n_states, c_n_inputs, c_n_measurements, A, B, R, Q, P);
+        lkfs.emplace_back(m_last_lkf_id,
+            BalloonPlanner::c_n_states,
+            BalloonPlanner::c_n_inputs,
+            BalloonPlanner::c_n_measurements,
+            A, B, R, Q, P);
         m_last_lkf_id++;
         Lkf& new_lkf = lkfs.back();
 
