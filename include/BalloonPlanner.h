@@ -101,9 +101,7 @@ namespace balloon_planner
         try
         {
           const ros::Duration timeout(1.0 / 100.0);
-          geometry_msgs::TransformStamped transform;
-          // Obtain transform from sensor into world frame
-          transform = m_tf_buffer.lookupTransform(m_world_frame, frame_name, stamp, timeout);
+          geometry_msgs::TransformStamped transform = m_tf_buffer.lookupTransform(m_world_frame, frame_name, stamp, timeout);
           tf_out = tf2::transformToEigen(transform.transform);
         } catch (tf2::TransformException& ex)
         {

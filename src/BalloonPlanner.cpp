@@ -141,7 +141,7 @@ void BalloonPlanner::onInit()
 
   double planning_period = pl.load_param2<double>("planning_period");
   double lkf_dt = pl.load_param2<double>("lkf_dt", lkf_dt);
-  pl.load_param("world_frame", m_world_frame, std::string("local_origin"));
+  pl.load_param("world_frame", m_world_frame);
 
   if (!pl.loaded_successfully())
   {
