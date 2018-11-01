@@ -142,7 +142,6 @@ void BalloonPlanner::onInit()
   double planning_period = pl.load_param2<double>("planning_period");
   double lkf_dt = pl.load_param2<double>("lkf_dt", lkf_dt);
   pl.load_param("world_frame", m_world_frame, std::string("local_origin"));
-  pl.load_param("uav_frame", m_uav_frame);
 
   if (!pl.loaded_successfully())
   {
@@ -165,7 +164,6 @@ void BalloonPlanner::onInit()
   m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
   mrs_lib::SubscribeMgr smgr(nh);
   m_sh_balloons = smgr.create_handler_threadsafe<sensor_msgs::PointCloud>("balloon_cloud_in", 10, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  m_sb_odom = smgr.create_odom_buffer("odom_main", 10, 100, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
 
   if (!smgr.loaded_successfully())
   {

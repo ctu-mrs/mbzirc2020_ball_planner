@@ -76,7 +76,7 @@ namespace balloon_planner
       // --------------------------------------------------------------
 
       /* Parameters, loaded from ROS //{ */
-      std::string m_world_frame, m_uav_frame;
+      std::string m_world_frame;
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */
@@ -84,7 +84,6 @@ namespace balloon_planner
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
       mrs_lib::SubscribeHandlerPtr<sensor_msgs::PointCloud> m_sh_balloons;
-      mrs_lib::SubscribeOdomBufferPtr m_sb_odom;
       ros::Publisher m_pub_odom_balloon;
       ros::Timer m_lkf_update_timer;
       ros::Timer m_main_loop_timer;
@@ -103,50 +102,12 @@ namespace balloon_planner
         {
           const ros::Duration timeout(1.0 / 100.0);
           geometry_msgs::TransformStamped transform;
-          // Obtain transform from snesor into world frame
-          transform = m_tf_buffer.lookupTransform(m_uav_frame, frame_name, stamp, timeout);
-
-          Eigen::Affine3d u2w_tf;
-          if (!get_UAV_transform_to_world(stamp, u2w_tf))
-          {
-            return false;
-          }
-
-          // Obtain transform from camera frame into world
-          tf_out = u2w_tf*tf2::transformToEigen(transform.transform);
+          // Obtain transform from sensor into world frame
+          transform = m_tf_buffer.lookupTransform(m_world_frame, frame_name, stamp, timeout);
+          tf_out = tf2::transformToEigen(transform.transform);
         } catch (tf2::TransformException& ex)
         {
           ROS_WARN("Error during transform from \"%s\" frame to \"%s\" frame.\n\tMSG: %s", frame_name.c_str(), m_world_frame.c_str(), ex.what());
-          return false;
-        }
-        return true;
-      }
-      //}
-
-      /* get_UAV_transform_to_world() method //{ */
-      bool get_UAV_transform_to_world(ros::Time stamp, Eigen::Affine3d& tf_out)
-      {
-        nav_msgs::Odometry odom;
-        int ret;
-        if ((ret = m_sb_odom->get_closest(stamp, odom)) == 0)
-        {
-          geometry_msgs::Transform transform;
-          transform.translation.x = odom.pose.pose.position.x;
-          transform.translation.y = odom.pose.pose.position.y;
-          transform.translation.z = odom.pose.pose.position.z;
-          transform.rotation = odom.pose.pose.orientation;
-          /* transform.rotation.w = -transform.rotation.w; */
-
-          // Obtain transform from camera frame into world
-          tf_out = tf2::transformToEigen(transform);
-        } else
-        {
-          std::string err;
-          if (ret > 0)
-            err = "The message buffer is too short.";
-          else
-            err = "The requested message is too new.";
-          ROS_WARN("Error during creating from UAV odometry at time %.3f.\nERR: %s", stamp.toSec(), err.c_str());
           return false;
         }
         return true;
