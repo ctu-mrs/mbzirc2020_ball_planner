@@ -30,15 +30,17 @@ namespace balloon_planner
       int new_lkfs = 0;
       int kicked_out_lkfs = 0;
       int ending_lkfs = 0;
-      // observer pointer, which will contain the most likely LKF (if any)
-      Lkf const * most_certain_lkf = nullptr;
+      // this will contain a copy of the picked LKF (if any)
+      Lkf picked_lkf;
+      bool picked_lkf_set = false;
+
       /* Process the detections and update the LKFs, find the most certain LKF after the update, kick out uncertain LKFs //{ */
       // TODO: assignment problem?? (https://en.wikipedia.org/wiki/Hungarian_algorithm)
       {
         size_t n_meas = balloons.points.size();
-        std::vector<int> meas_used(n_meas, 0);
-        std::vector<pos_cov_t> pos_covs;
-        pos_covs.reserve(n_meas);
+        std::vector<int> meas_used;
+        std::vector<pos_cov_t> measurements;
+        measurements.reserve(n_meas);
   
         /* Calculate 3D positions and covariances of the detections //{ */
         for (const auto& pt : balloons.points)
@@ -56,87 +58,26 @@ namespace balloon_planner
           pos_cov_t pos_cov;
           pos_cov.position = det_pos;
           pos_cov.covariance = det_cov;
-          pos_covs.push_back(pos_cov);
+          measurements.push_back(pos_cov);
         }
         //}
   
-        /* Process the LKFs - assign measurements and kick out too uncertain ones, find the most certain one //{ */
+        /* Process the LKFs - assign measurements and kick out too uncertain ones, find the closest one //{ */
         {
-          // the LKF must have received at least min_corrs_to_consider corrections
-          // in order to be considered for the search of the most certain LKF
-          int max_corrections = m_drmgr_ptr->config.min_corrs_to_consider;
-          double picked_uncertainty;
-  
           std::lock_guard<std::mutex> lck(m_lkfs_mtx);
           starting_lkfs = m_lkfs.size();
-          if (!m_lkfs.empty())
-          {
-            for (std::list<Lkf>::iterator it = std::begin(m_lkfs); it != std::end(m_lkfs); it++)
-            {
-              auto& lkf = *it;
-  
-              /* Assign a measurement to the LKF based on the smallest divergence and update the LKF //{ */
-              {
-                double divergence;
-                size_t closest_it = find_closest_measurement(lkf, pos_covs, divergence);
-  
-                /* Evaluate whether the divergence is small enough to justify the update //{ */
-                if (divergence < m_drmgr_ptr->config.max_update_divergence)
-                {
-                  Eigen::Vector3d closest_pos = pos_covs.at(closest_it).position;
-                  Eigen::Matrix3d closest_cov = pos_covs.at(closest_it).covariance;
-                  lkf.setMeasurement(closest_pos, closest_cov);
-                  lkf.doCorrection();
-                  meas_used.at(closest_it)++;
-                }
-                //}
-  
-              }
-              //}
-  
-              /* Check if the uncertainty of this LKF is too high and if so, delete it, otherwise consider it for the most certain LKF //{ */
-              {
-                // First, check the uncertainty
-                double uncertainty = calc_LKF_uncertainty(lkf);
-                if (uncertainty > m_drmgr_ptr->config.max_lkf_uncertainty || std::isnan(uncertainty))
-                {
-                  it = m_lkfs.erase(it);
-                  it--;
-                  kicked_out_lkfs++;
-                } else
-                // If LKF survived,  consider it as candidate to be picked.
-                // The LKF is picked if it has higher number of corrections than the found maximum.
-                // If it has the same number of corrections as a previously found maximum then uncertainties are
-                // compared to decide which is going to be picked.
-                if (
-                    // current LKF has higher or equal number of corrections as is the current max. found
-                    lkf.getNCorrections() >= max_corrections
-                    // no LKF has been picker yet OR cur LKF has higher number of corrections OR cur LKF has same number of corrections but lower uncertainty
-                 && (most_certain_lkf == nullptr  || lkf.getNCorrections() > max_corrections  || uncertainty < picked_uncertainty)
-                    )
-                {
-                  most_certain_lkf = &lkf;
-                  max_corrections = lkf.getNCorrections();
-                  picked_uncertainty = uncertainty;
-                }
-              }
-              //}
-  
-            }
-          }
-          if (most_certain_lkf != nullptr)
-            std::cout << "Most certain LKF found with " << picked_uncertainty << " uncertainty " << " and " << most_certain_lkf->getNCorrections() << " correction iterations" << std::endl;
-        }
-        //}
-  
-        /* Instantiate new LKFs for unused measurements (these are not considered as candidates for the most certain LKF) //{ */
-        {
-          std::lock_guard<std::mutex> lck(m_lkfs_mtx);
+
+          meas_used = assign_corrections(measurements, m_lkfs);
+
+          kicked_out_lkfs = kick_uncertain(m_lkfs);
+
+          picked_lkf_set = find_closest_lkf(m_lkfs, s2w_tf.translation(), picked_lkf);
+
           for (size_t it = 0; it < n_meas; it++)
           {
             if (meas_used.at(it) < 1)
             {
-              create_new_lkf(m_lkfs, pos_covs.at(it));
+              create_new_lkf(m_lkfs, measurements.at(it));
               new_lkfs++;
             }
           }
@@ -147,12 +88,21 @@ namespace balloon_planner
       }
       //}
   
-      /* Publish message of the most likely LKF (if found) //{ */
-      if (most_certain_lkf != nullptr)
+      if (picked_lkf_set)
       {
-        std::cout << "Publishing most certain LKF result from LKF#" << most_certain_lkf->id << std::endl;
-        nav_msgs::Odometry msg = create_message(*most_certain_lkf, balloons.header.stamp);
+        double picked_uncertainty = calc_LKF_uncertainty(picked_lkf);
+        double picked_distance = calc_LKF_distance(picked_lkf, s2w_tf.translation());
+        std::cout << "Closest LKF found in distance " << picked_distance << "m with " << picked_uncertainty << " uncertainty " << " and " << picked_lkf.getNCorrections() << " correction iterations" << std::endl;
+
+        /* Publish message of the most likely LKF //{ */
+        std::cout << "Publishing most certain LKF result from LKF#" << picked_lkf.id << std::endl;
+        pos_cov_t pos_cov_out;
+        Eigen::Affine3d w2s_tf = s2w_tf.inverse();
+        pos_cov_out.position   = w2s_tf * picked_lkf.getStates().block<3, 1>(0, 0);
+        pos_cov_out.covariance = rotate_covariance(picked_lkf.getCovariance(), w2s_tf.rotation());
+        nav_msgs::Odometry msg = create_message(pos_cov_out, balloons.header);
         m_pub_odom_balloon.publish(msg);
+        //}
       } else
       {
         std::cout << "No LKF is certain yet, publishing nothing" << std::endl;

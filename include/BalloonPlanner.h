@@ -247,34 +247,27 @@ namespace balloon_planner
       //}
 
       /* create_message() method //{ */
-      nav_msgs::Odometry create_message(const Lkf& lkf, ros::Time stamp)
+      nav_msgs::Odometry create_message(const pos_cov_t& pos_cov, std_msgs::Header header)
       {
         nav_msgs::Odometry msg;
         geometry_msgs::PoseWithCovariance& msg_pose = msg.pose;
 
-        msg.header.frame_id = m_world_frame;
-        msg.header.stamp = stamp;
+        msg.header = header;
 
-        {
-          const Eigen::Vector3d position = lkf.getStates().block<3, 1>(0, 0);
-          msg_pose.pose.position.x = position(0);
-          msg_pose.pose.position.y = position(1);
-          msg_pose.pose.position.z = position(2);
-        }
+        msg_pose.pose.position.x = pos_cov.position(0);
+        msg_pose.pose.position.y = pos_cov.position(1);
+        msg_pose.pose.position.z = pos_cov.position(2);
 
         msg_pose.pose.orientation.w = 1.0;
 
+        for (int r = 0; r < 6; r++)
         {
-          const Eigen::Matrix3d covariance = lkf.getCovariance().block<3, 3>(0, 0);
-          for (int r = 0; r < 6; r++)
+          for (int c = 0; c < 6; c++)
           {
-            for (int c = 0; c < 6; c++)
-            {
-              if (r < 3 && c < 3)
-                msg_pose.covariance[r*6 + c] = covariance(r, c);
-              else if (r == c)
-                msg_pose.covariance[r*6 + c] = 666;
-            }
+            if (r < 3 && c < 3)
+              msg_pose.covariance[r*6 + c] = pos_cov.covariance(r, c);
+            else if (r == c)
+              msg_pose.covariance[r*6 + c] = 666;
           }
         }
 
@@ -282,115 +275,189 @@ namespace balloon_planner
       }
       //}
 
-    private:
-
-      /* LKF - related member variables //{ */
-      std::mutex m_lkfs_mtx; // mutex for synchronization of the m_lkfs variable
-      std::list<Lkf> m_lkfs; // all currently active LKFs
-      int m_last_lkf_id; // ID of the last created LKF - used when creating a new LKF to generate a new unique ID
-      //}
-      
-      /* Definitions of the LKF (consts, typedefs, etc.) //{ */
-      static constexpr int c_n_states = 3;
-      static constexpr int c_n_inputs = 0;
-      static constexpr int c_n_measurements = 3;
-
-      typedef Eigen::Matrix<double, c_n_states, 1> lkf_x_t;
-      typedef Eigen::Matrix<double, c_n_inputs, 1> lkf_u_t;
-      typedef Eigen::Matrix<double, c_n_measurements, 1> lkf_z_t;
-
-      typedef Eigen::Matrix<double, c_n_states, c_n_states> lkf_A_t;
-      typedef Eigen::Matrix<double, c_n_states, c_n_inputs> lkf_B_t;
-      typedef Eigen::Matrix<double, c_n_measurements, c_n_states> lkf_P_t;
-      typedef Eigen::Matrix<double, c_n_states, c_n_states> lkf_R_t;
-      typedef Eigen::Matrix<double, c_n_measurements, c_n_measurements> lkf_Q_t;
-
-      lkf_A_t create_A(double dt)
+      /* assign_corrections() method //{ */
+      std::vector<int> assign_corrections(const std::vector<pos_cov_t>& measurements, std::list<Lkf>& lkfs)
       {
-        lkf_A_t A;
-        A << 1, 0, 0,
-             0, 1, 0,
-             0, 0, 1;
-        return A;
-      }
-
-      lkf_P_t create_P()
-      {
-        lkf_P_t P;
-        P << 1, 0, 0,
-             0, 1, 0,
-             0, 0, 1;
-        return P;
-      }
-
-      lkf_R_t create_R(double dt)
-      {
-        lkf_R_t R = dt*m_drmgr_ptr->config.lkf_process_noise_pos*lkf_R_t::Identity();
-        return R;
-      }
-      //}
-
-      /* create_new_lkf() method //{ */
-      void create_new_lkf(std::list<Lkf>& lkfs, pos_cov_t& initialization)
-      {
-        const lkf_A_t A; // changes in dependence on the measured dt, so leave blank for now
-        const lkf_B_t B; // zero rows zero cols matrix
-        const lkf_P_t P = create_P();
-        const lkf_R_t R; // depends on the measured dt, so leave blank for now
-        const lkf_Q_t Q; // depends on the measurement, so leave blank for now
-      
-        lkfs.emplace_back(m_last_lkf_id,
-            BalloonPlanner::c_n_states,
-            BalloonPlanner::c_n_inputs,
-            BalloonPlanner::c_n_measurements,
-            A, B, R, Q, P);
-        m_last_lkf_id++;
-        Lkf& new_lkf = lkfs.back();
-
-        // Initialize the LKF using the new measurement
-        lkf_x_t init_state = initialization.position;
-        lkf_R_t init_state_cov = initialization.covariance;
-
-        new_lkf.setStates(init_state);
-        new_lkf.setCovariance(init_state_cov);
-      }
-      //}
-
-      /* lkf_update() method //{ */
-      void lkf_update(const ros::TimerEvent& evt)
-      {
-        double dt = (evt.current_real - evt.last_real).toSec();
-        lkf_A_t A = create_A(dt);
-        lkf_R_t R = create_R(dt);
-
+        std::vector<int> meas_used(lkfs.size(), 0);
+        for (Lkf& lkf : lkfs)
         {
-          std::lock_guard<std::mutex> lck(m_lkfs_mtx);
-          for (auto& lkf : m_lkfs)
+          /* Assign a measurement to the LKF based on the smallest divergence and update the LKF */
+          double divergence;
+          size_t closest_it = find_closest_measurement(lkf, measurements, divergence);
+      
+          /* Evaluate whether the divergence is small enough to justify the update //{ */
+          if (divergence < m_drmgr_ptr->config.max_update_divergence)
           {
-            lkf.setA(A);
-            lkf.setR(R);
-            lkf.iterateWithoutCorrection();
+            Eigen::Vector3d closest_pos = measurements.at(closest_it).position;
+            Eigen::Matrix3d closest_cov = measurements.at(closest_it).covariance;
+            lkf.setMeasurement(closest_pos, closest_cov);
+            lkf.doCorrection();
+            meas_used.at(closest_it)++;
+          }
+          //}
+        }
+        return meas_used;
+      }
+      //}
+
+      /* kick_uncertain() method //{ */
+      int kick_uncertain(std::list<Lkf>& lkfs)
+      {
+        int kicked_out_lkfs = 0;
+        for (std::list<Lkf>::iterator it = std::begin(m_lkfs); it != std::end(m_lkfs); it++)
+        {
+          auto& lkf = *it;
+          /* Check if the uncertainty of this LKF is too high and if so, delete it, otherwise consider it for the most certain LKF //{ */
+          // First, check the uncertainty
+          double uncertainty = calc_LKF_uncertainty(lkf);
+          if (uncertainty > m_drmgr_ptr->config.max_lkf_uncertainty || std::isnan(uncertainty))
+          {
+            it = lkfs.erase(it);
+            it--;
+            kicked_out_lkfs++;
+          }
+          //}
+        }
+        return kicked_out_lkfs;
+      }
+      //}
+
+      double calc_LKF_distance(const Lkf& lkf, const Eigen::Vector3d to_point)
+      {
+        return (lkf.getStates().block<3, 1>(0, 0) - to_point).norm(); 
+      }
+
+      /* find_closest_lkf() method //{ */
+      bool find_closest_lkf(std::list<Lkf>& lkfs, const Eigen::Vector3d to_point, Lkf& closest_lkf_out)
+      {
+        Lkf const * closest_lkf;
+        double closest_dist = std::numeric_limits<double>::max();
+        bool closest_lkf_set = false;
+        for (const Lkf& lkf : lkfs)
+        {
+          double dist = calc_LKF_distance(lkf, to_point);
+          if (dist < closest_dist)
+          {
+            closest_lkf = &lkf;
+            closest_dist = dist;
+            closest_lkf_set = true;
           }
         }
+        if (closest_lkf_set)
+          closest_lkf_out = *closest_lkf;
+        return closest_lkf_set;
       }
       //}
 
-    private:
+private:
 
-      // --------------------------------------------------------------
-      // |        detail implementation methods (maybe unused)        |
-      // --------------------------------------------------------------
+  /* LKF - related member variables //{ */
+  std::mutex m_lkfs_mtx; // mutex for synchronization of the m_lkfs variable
+  std::list<Lkf> m_lkfs; // all currently active LKFs
+  int m_last_lkf_id; // ID of the last created LKF - used when creating a new LKF to generate a new unique ID
+  //}
+  
+  /* Definitions of the LKF (consts, typedefs, etc.) //{ */
+  static constexpr int c_n_states = 3;
+  static constexpr int c_n_inputs = 0;
+  static constexpr int c_n_measurements = 3;
 
-      /* kullback_leibler_divergence() method //{ */
-      // This method calculates the kullback-leibler divergence of two three-dimensional normal distributions.
-      // It is used for deciding which measurement to use for which LKF.
-      double kullback_leibler_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
+  typedef Eigen::Matrix<double, c_n_states, 1> lkf_x_t;
+  typedef Eigen::Matrix<double, c_n_inputs, 1> lkf_u_t;
+  typedef Eigen::Matrix<double, c_n_measurements, 1> lkf_z_t;
+
+  typedef Eigen::Matrix<double, c_n_states, c_n_states> lkf_A_t;
+  typedef Eigen::Matrix<double, c_n_states, c_n_inputs> lkf_B_t;
+  typedef Eigen::Matrix<double, c_n_measurements, c_n_states> lkf_P_t;
+  typedef Eigen::Matrix<double, c_n_states, c_n_states> lkf_R_t;
+  typedef Eigen::Matrix<double, c_n_measurements, c_n_measurements> lkf_Q_t;
+
+  lkf_A_t create_A(double dt)
+  {
+    lkf_A_t A;
+    A << 1, 0, 0,
+         0, 1, 0,
+         0, 0, 1;
+    return A;
+  }
+
+  lkf_P_t create_P()
+  {
+    lkf_P_t P;
+    P << 1, 0, 0,
+         0, 1, 0,
+         0, 0, 1;
+    return P;
+  }
+
+  lkf_R_t create_R(double dt)
+  {
+    lkf_R_t R = dt*m_drmgr_ptr->config.lkf_process_noise_pos*lkf_R_t::Identity();
+    return R;
+  }
+  //}
+
+  /* create_new_lkf() method //{ */
+  void create_new_lkf(std::list<Lkf>& lkfs, pos_cov_t& initialization)
+  {
+    const lkf_A_t A; // changes in dependence on the measured dt, so leave blank for now
+    const lkf_B_t B; // zero rows zero cols matrix
+    const lkf_P_t P = create_P();
+    const lkf_R_t R; // depends on the measured dt, so leave blank for now
+    const lkf_Q_t Q; // depends on the measurement, so leave blank for now
+  
+    lkfs.emplace_back(m_last_lkf_id,
+        BalloonPlanner::c_n_states,
+        BalloonPlanner::c_n_inputs,
+        BalloonPlanner::c_n_measurements,
+        A, B, R, Q, P);
+    m_last_lkf_id++;
+    Lkf& new_lkf = lkfs.back();
+
+    // Initialize the LKF using the new measurement
+    lkf_x_t init_state = initialization.position;
+    lkf_R_t init_state_cov = initialization.covariance;
+
+    new_lkf.setStates(init_state);
+    new_lkf.setCovariance(init_state_cov);
+  }
+  //}
+
+  /* lkf_update() method //{ */
+  void lkf_update(const ros::TimerEvent& evt)
+  {
+    double dt = (evt.current_real - evt.last_real).toSec();
+    lkf_A_t A = create_A(dt);
+    lkf_R_t R = create_R(dt);
+
+    {
+      std::lock_guard<std::mutex> lck(m_lkfs_mtx);
+      for (auto& lkf : m_lkfs)
       {
-        const unsigned k = 3; // number of dimensions -- DON'T FORGET TO CHANGE IF NUMBER OF DIMENSIONS CHANGES!
-        const double div = 0.5*( (sigma1.inverse()*sigma0).trace() + (mu1-mu0).transpose()*(sigma1.inverse())*(mu1-mu0) - k + log((sigma1.determinant())/sigma0.determinant()));
-        return div;
+        lkf.setA(A);
+        lkf.setR(R);
+        lkf.iterateWithoutCorrection();
       }
-      //}
+    }
+  }
+  //}
+
+private:
+
+  // --------------------------------------------------------------
+  // |        detail implementation methods (maybe unused)        |
+  // --------------------------------------------------------------
+
+  /* kullback_leibler_divergence() method //{ */
+  // This method calculates the kullback-leibler divergence of two three-dimensional normal distributions.
+  // It is used for deciding which measurement to use for which LKF.
+  double kullback_leibler_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
+  {
+    const unsigned k = 3; // number of dimensions -- DON'T FORGET TO CHANGE IF NUMBER OF DIMENSIONS CHANGES!
+    const double div = 0.5*( (sigma1.inverse()*sigma0).trace() + (mu1-mu0).transpose()*(sigma1.inverse())*(mu1-mu0) - k + log((sigma1.determinant())/sigma0.determinant()));
+    return div;
+  }
+  //}
 
   };
   
