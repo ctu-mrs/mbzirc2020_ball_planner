@@ -278,7 +278,7 @@ namespace balloon_planner
       /* assign_corrections() method //{ */
       std::vector<int> assign_corrections(const std::vector<pos_cov_t>& measurements, std::list<Lkf>& lkfs)
       {
-        std::vector<int> meas_used(lkfs.size(), 0);
+        std::vector<int> meas_used(measurements.size(), 0);
         for (Lkf& lkf : lkfs)
         {
           /* Assign a measurement to the LKF based on the smallest divergence and update the LKF */
@@ -335,12 +335,15 @@ namespace balloon_planner
         bool closest_lkf_set = false;
         for (const Lkf& lkf : lkfs)
         {
-          double dist = calc_LKF_distance(lkf, to_point);
-          if (dist < closest_dist)
+          if (lkf.getNCorrections() >= m_drmgr_ptr->config.min_corrs_to_consider)
           {
-            closest_lkf = &lkf;
-            closest_dist = dist;
-            closest_lkf_set = true;
+            double dist = calc_LKF_distance(lkf, to_point);
+            if (dist < closest_dist)
+            {
+              closest_lkf = &lkf;
+              closest_dist = dist;
+              closest_lkf_set = true;
+            }
           }
         }
         if (closest_lkf_set)

@@ -22,12 +22,16 @@ namespace balloon_planner
         : id(id), m_n_corrections(0), lkf_impl(n, m, p, A, B, R, Q, P)
       {};
 
-      LkfAssociation operator=(const LkfAssociation& o)
+      LkfAssociation& operator=(const LkfAssociation& o)
       {
-        return LkfAssociation(o);
+        if (this == &o) return *this;
+        id = o.id;
+        m_n_corrections = o.m_n_corrections;
+        lkf_impl = o.lkf_impl;
+        return *this;
       };
 
-      const int id;
+      int getId() {return id;};
 
     public:
 
@@ -88,6 +92,7 @@ namespace balloon_planner
       }
 
     private:
+      int id;
       int m_n_corrections;
       mrs_lib::Lkf lkf_impl;
 

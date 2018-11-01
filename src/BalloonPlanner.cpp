@@ -95,7 +95,7 @@ namespace balloon_planner
         std::cout << "Closest LKF found in distance " << picked_distance << "m with " << picked_uncertainty << " uncertainty " << " and " << picked_lkf.getNCorrections() << " correction iterations" << std::endl;
 
         /* Publish message of the most likely LKF //{ */
-        std::cout << "Publishing most certain LKF result from LKF#" << picked_lkf.id << std::endl;
+        std::cout << "Publishing most certain LKF result from LKF#" << picked_lkf.getId() << std::endl;
         pos_cov_t pos_cov_out;
         Eigen::Affine3d w2s_tf = s2w_tf.inverse();
         pos_cov_out.position   = w2s_tf * picked_lkf.getStates().block<3, 1>(0, 0);
