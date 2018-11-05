@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  config/planning_params.cfg
+  config/PlanningParams.cfg
   )
 
 catkin_package(
