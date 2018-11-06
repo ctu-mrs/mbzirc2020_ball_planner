@@ -206,12 +206,13 @@ namespace balloon_planner
       //}
 
       /* create_message() method //{ */
-      nav_msgs::Odometry create_message(const pos_cov_t& pos_cov, std_msgs::Header header)
+      nav_msgs::Odometry create_message(const pos_cov_t& pos_cov, std_msgs::Header header, int lkf_id)
       {
         nav_msgs::Odometry msg;
         geometry_msgs::PoseWithCovariance& msg_pose = msg.pose;
 
         msg.header = header;
+        msg.child_frame_id = std::to_string(lkf_id);
 
         msg_pose.pose.position.x = pos_cov.position(0);
         msg_pose.pose.position.y = pos_cov.position(1);

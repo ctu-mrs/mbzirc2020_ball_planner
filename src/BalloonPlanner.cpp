@@ -100,7 +100,7 @@ namespace balloon_planner
         Eigen::Affine3d w2s_tf = s2w_tf.inverse();
         pos_cov_out.position   = w2s_tf * picked_lkf.getStates().block<3, 1>(0, 0);
         pos_cov_out.covariance = rotate_covariance(picked_lkf.getCovariance(), w2s_tf.rotation());
-        nav_msgs::Odometry msg = create_message(pos_cov_out, balloons.header);
+        nav_msgs::Odometry msg = create_message(pos_cov_out, balloons.header, picked_lkf.getId());
         m_pub_odom_balloon.publish(msg);
         //}
       } else
