@@ -112,8 +112,10 @@ namespace balloon_planner
       std::cout << "LKFs: " << starting_lkfs << " - " << kicked_out_lkfs << " + " << new_lkfs << " = " << ending_lkfs << std::endl;
       ros::Time end_t = ros::Time::now();
       static double dt = (end_t - start_t).toSec();
+      ros::Duration del = ros::Time::now() - balloons.header.stamp;
       dt = 0.9 * dt + 0.1 * (end_t - start_t).toSec();
       std::cout << "processing FPS: " << 1 / dt << "Hz" << std::endl;
+      std::cout << "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms" << std::endl;
   
       ROS_INFO("[%s]: New data processed", m_node_name.c_str());
     }
