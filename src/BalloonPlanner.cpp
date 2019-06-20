@@ -6,6 +6,8 @@ namespace balloon_planner
   /* main_loop() method //{ */
   void BalloonPlanner::main_loop([[maybe_unused]] const ros::TimerEvent& evt)
   {
+    load_dynparams(m_drmgr_ptr->config);
+
     if (m_sh_balloons->new_data())
     {
       sensor_msgs::PointCloud balloons = m_sh_balloons->get_data();
@@ -169,6 +171,17 @@ namespace balloon_planner
     m_current_estimate_last_update = ros::Time::now();
     m_current_estimate_n_updates = 0;
     ROS_INFO("[%s]: Current chosen balloon reset.", m_node_name.c_str());
+  }
+  //}
+
+  /* load_dynparams() method //{ */
+  void BalloonPlanner::load_dynparams(drcfg_t cfg)
+  {
+    m_min_balloon_height = cfg.min_balloon_height;
+    m_filter_coeff = cfg.filter_coeff;
+    m_gating_distance = cfg.gating_distance;
+    m_max_time_since_update = cfg.max_time_since_update;
+    m_min_updates_to_confirm = cfg.min_updates_to_confirm;
   }
   //}
 

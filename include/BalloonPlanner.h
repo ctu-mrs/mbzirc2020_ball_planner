@@ -43,7 +43,8 @@
 namespace balloon_planner
 {
   // shortcut type to the dynamic reconfigure manager template instance
-  typedef mrs_lib::DynamicReconfigureMgr<balloon_planner::PlanningParamsConfig> drmgr_t;
+  using drcfg_t = balloon_planner::PlanningParamsConfig;
+  using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
 
   /* //{ class BalloonPlanner */
 
@@ -130,6 +131,7 @@ namespace balloon_planner
       std::vector<Eigen::Vector3d> message_to_positions(const sensor_msgs::PointCloud& balloon_msg);
 
       bool reset_chosen_callback(balloon_planner::ResetChosen::Request& req, balloon_planner::ResetChosen::Response& resp);
+      void load_dynparams(drcfg_t cfg);
 
   };
   
