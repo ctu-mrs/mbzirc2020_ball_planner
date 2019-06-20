@@ -15,21 +15,32 @@ namespace balloon_planner
       if (balloons.points.size() > 0)
       {
         auto balloons_positions = message_to_positions(balloons);
+        bool meas_valid = false;
         Eigen::Vector3d closest_balloon;
         if (m_current_estimate_exists)
         {
-          closest_balloon = find_closest_to(balloons_positions, m_current_estimate);
-          m_current_estimate = m_filter_coeff*m_current_estimate + (1 - m_filter_coeff)*closest_balloon;
+          meas_valid = find_closest_to(balloons_positions, m_current_estimate, closest_balloon, true);
+          if (meas_valid)
+            m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon;
         } else
         {
-          closest_balloon = find_closest(balloons_positions);
-          m_current_estimate = closest_balloon;
+          meas_valid = find_closest(balloons_positions, closest_balloon);
+          if (meas_valid)
+          {
+            m_current_estimate = closest_balloon;
+            m_current_estimate_exists = true;
+            //TODO: if time since last update > threshold, m_current_estimate_exists = false
+          }
         }
     
-        std_msgs::Header header;
-        header.frame_id = m_world_frame;
-        header.stamp = balloons.header.stamp;
-        m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
+        if (m_current_estimate_exists)
+        {
+          std_msgs::Header header;
+          header.frame_id = m_world_frame;
+          header.stamp = balloons.header.stamp;
+          m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
+          ROS_INFO("[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x(), m_current_estimate.y(), m_current_estimate.z());
+        }
       }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
       std::cout << "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms" << std::endl;
@@ -60,10 +71,10 @@ namespace balloon_planner
     return m2w_tf.translation();
   }
 
-  Eigen::Vector3d BalloonPlanner::find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position)
+  bool BalloonPlanner::find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position, Eigen::Vector3d& closest_out, bool use_gating)
   {
     double min_dist = std::numeric_limits<double>::infinity();
-    Eigen::Vector3d closest_pt;
+    Eigen::Vector3d closest_pt(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
     for (const auto& pt : balloons_positions)
     {
       const double cur_dist = (to_position - pt).norm();
@@ -73,13 +84,27 @@ namespace balloon_planner
         closest_pt = pt;
       }
     }
-    return closest_pt;
+    if (use_gating)
+    {
+      if (min_dist < m_gating_distance)
+      {
+        closest_out = closest_pt;
+        return true;
+      } else
+      {
+        return false;
+      }
+    } else
+    {
+      closest_out = closest_pt;
+      return true;
+    }
   }
 
-  Eigen::Vector3d BalloonPlanner::find_closest(const std::vector<Eigen::Vector3d>& balloons_positions)
+  bool BalloonPlanner::find_closest(const std::vector<Eigen::Vector3d>& balloons_positions, Eigen::Vector3d& closest_out)
   {
     Eigen::Vector3d cur_pos = get_cur_mav_pos();
-    return find_closest_to(balloons_positions, cur_pos);
+    return find_closest_to(balloons_positions, cur_pos, closest_out, false);
   }
 
   /* message_to_positions() method //{ */
@@ -133,6 +158,7 @@ void BalloonPlanner::onInit()
   pl.load_param("uav_frame_id", m_uav_frame_id);
   pl.load_param("min_balloon_height", m_min_balloon_height);
   pl.load_param("filter_coeff", m_filter_coeff);
+  pl.load_param("gating_distance", m_gating_distance);
 
   if (!pl.loaded_successfully())
   {

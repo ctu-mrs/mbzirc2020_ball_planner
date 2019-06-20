@@ -72,6 +72,7 @@ namespace balloon_planner
       std::string m_uav_frame_id;
       double m_min_balloon_height;
       double m_filter_coeff;
+      double m_gating_distance;
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */
@@ -115,8 +116,8 @@ namespace balloon_planner
 
       geometry_msgs::PoseStamped to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header);
       Eigen::Vector3d get_cur_mav_pos();
-      Eigen::Vector3d find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& m_current_estimate);
-      Eigen::Vector3d find_closest(const std::vector<Eigen::Vector3d>& balloons_positions);
+      bool find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position, Eigen::Vector3d& closest_out, bool use_gating = false);
+      bool find_closest(const std::vector<Eigen::Vector3d>& balloons_positions, Eigen::Vector3d& closest_out);
 
       std::vector<Eigen::Vector3d> message_to_positions(const sensor_msgs::PointCloud& balloon_msg);
 

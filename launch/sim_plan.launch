@@ -22,7 +22,7 @@
       <remap from="~balloon_cloud_in" to="object_detect/detected_objects" />
 
       <!-- Publishers -->
-      <remap from="~balloon_chosen_out" to="balloon_chosen_out" />
+      <!-- <remap from="~balloon_chosen_out" to="balloon_chosen_out" /> -->
 
     </node>
 
