@@ -159,6 +159,7 @@ namespace balloon_planner
     m_current_estimate_exists = false;
     m_current_estimate_last_update = ros::Time::now();
     m_current_estimate_n_updates = 0;
+    ROS_INFO("[%s]: Current chosen balloon reset.", m_node_name.c_str());
   }
 
 /* onInit() //{ */
@@ -211,6 +212,7 @@ void BalloonPlanner::onInit()
     ros::shutdown();
   }
 
+  m_reset_chosen_server = nh.advertiseService("reset_chosen", &BalloonPlanner::reset_chosen_callback, this);
   //}
 
   /* publishers //{ */
@@ -238,6 +240,18 @@ void BalloonPlanner::onInit()
 }
 
 //}
+
+  /* BalloonPlanner::reset_chosen_callback() method //{ */
+  
+  bool BalloonPlanner::reset_chosen_callback(balloon_planner::ResetChosen::Request& req, balloon_planner::ResetChosen::Response& resp)
+  {
+    reset_current_estimate();
+    resp.message = "Current chosen balloon was reset.";
+    resp.success = true;
+    return true;
+  }
+  
+  //}
 
 }  // namespace balloon_planner
 

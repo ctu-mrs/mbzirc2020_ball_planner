@@ -36,6 +36,7 @@
 #include <mutex>
 
 #include <balloon_planner/PlanningParamsConfig.h>
+#include <balloon_planner/ResetChosen.h>
 
 //}
 
@@ -85,6 +86,8 @@ namespace balloon_planner
 
       ros::Publisher m_pub_chosen_balloon;
 
+      ros::ServiceServer m_reset_chosen_server;
+
       ros::Timer m_main_loop_timer;
       //}
 
@@ -125,6 +128,8 @@ namespace balloon_planner
       bool find_closest(const std::vector<Eigen::Vector3d>& balloons_positions, Eigen::Vector3d& closest_out);
 
       std::vector<Eigen::Vector3d> message_to_positions(const sensor_msgs::PointCloud& balloon_msg);
+
+      bool reset_chosen_callback(balloon_planner::ResetChosen::Request& req, balloon_planner::ResetChosen::Response& resp);
 
   };
   

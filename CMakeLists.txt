@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_msgs
   mrs_lib
   pcl_ros
+  message_generation
   )
 
 # include Eigen3
@@ -20,6 +21,18 @@ find_package(Eigen3 REQUIRED)
 generate_dynamic_reconfigure_options(
   config/PlanningParams.cfg
   )
+
+#Generate services in the 'srv' folder
+add_service_files(
+   FILES
+   ResetChosen.srv
+ )
+
+## Generate added messages and services with any dependencies listed here
+ generate_messages(
+   DEPENDENCIES
+   std_msgs
+ )
 
 catkin_package(
   INCLUDE_DIRS include
