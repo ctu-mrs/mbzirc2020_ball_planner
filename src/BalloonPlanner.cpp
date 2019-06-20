@@ -59,18 +59,21 @@ namespace balloon_planner
   }
   //}
 
+  /* to_output_message() method //{ */
   geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header)
   {
     geometry_msgs::PoseStamped ret;
-
+  
     ret.header = header;
     ret.pose.position.x = position_estimate.x();
     ret.pose.position.y = position_estimate.y();
     ret.pose.position.z = position_estimate.z();
-
+  
     return ret;
   }
+  //}
 
+  /* get_cur_mav_pos() method //{ */
   Eigen::Vector3d BalloonPlanner::get_cur_mav_pos()
   {
     Eigen::Affine3d m2w_tf;
@@ -79,7 +82,9 @@ namespace balloon_planner
       return Eigen::Vector3d(0, 0, 0);;
     return m2w_tf.translation();
   }
+  //}
 
+  /* find_closest_to() method //{ */
   bool BalloonPlanner::find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position, Eigen::Vector3d& closest_out, bool use_gating)
   {
     double min_dist = std::numeric_limits<double>::infinity();
@@ -109,12 +114,15 @@ namespace balloon_planner
       return true;
     }
   }
+  //}
 
+  /* find_closest() method //{ */
   bool BalloonPlanner::find_closest(const std::vector<Eigen::Vector3d>& balloons_positions, Eigen::Vector3d& closest_out)
   {
     Eigen::Vector3d cur_pos = get_cur_mav_pos();
     return find_closest_to(balloons_positions, cur_pos, closest_out, false);
   }
+  //}
 
   /* message_to_positions() method //{ */
   std::vector<Eigen::Vector3d> BalloonPlanner::message_to_positions(const sensor_msgs::PointCloud& balloon_msg)
@@ -154,6 +162,7 @@ namespace balloon_planner
   }
   //}
 
+  /* reset_current_estimate() method //{ */
   void BalloonPlanner::reset_current_estimate()
   {
     m_current_estimate_exists = false;
@@ -161,6 +170,7 @@ namespace balloon_planner
     m_current_estimate_n_updates = 0;
     ROS_INFO("[%s]: Current chosen balloon reset.", m_node_name.c_str());
   }
+  //}
 
 /* onInit() //{ */
 
