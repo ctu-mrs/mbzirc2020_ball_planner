@@ -73,6 +73,8 @@ namespace balloon_planner
       double m_min_balloon_height;
       double m_filter_coeff;
       double m_gating_distance;
+      double m_max_time_since_update;
+      double m_min_updates_to_confirm;
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */
@@ -88,6 +90,8 @@ namespace balloon_planner
 
       bool m_current_estimate_exists;
       Eigen::Vector3d m_current_estimate;
+      ros::Time m_current_estimate_last_update;
+      int m_current_estimate_n_updates;
 
     private:
 
@@ -112,8 +116,9 @@ namespace balloon_planner
       }
       //}
 
-      bool point_valid(const Eigen::Vector3d& pt);
+      bool point_valid(const geometry_msgs::Point32& pt, float dist_quality);
 
+      void reset_current_estimate();
       geometry_msgs::PoseStamped to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header);
       Eigen::Vector3d get_cur_mav_pos();
       bool find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position, Eigen::Vector3d& closest_out, bool use_gating = false);

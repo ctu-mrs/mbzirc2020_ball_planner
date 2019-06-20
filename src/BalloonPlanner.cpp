@@ -10,7 +10,7 @@ namespace balloon_planner
     {
       sensor_msgs::PointCloud balloons = m_sh_balloons->get_data();
   
-      ROS_INFO("[%s]: Processing %lu new detections", m_node_name.c_str(), balloons.points.size());
+      ROS_INFO_THROTTLE(1.0, "[%s]: Processing %lu new detections", m_node_name.c_str(), balloons.points.size());
 
       if (balloons.points.size() > 0)
       {
@@ -21,7 +21,11 @@ namespace balloon_planner
         {
           meas_valid = find_closest_to(balloons_positions, m_current_estimate, closest_balloon, true);
           if (meas_valid)
+          {
             m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon;
+            m_current_estimate_last_update = balloons.header.stamp;
+            m_current_estimate_n_updates++;
+          }
         } else
         {
           meas_valid = find_closest(balloons_positions, closest_balloon);
@@ -29,23 +33,28 @@ namespace balloon_planner
           {
             m_current_estimate = closest_balloon;
             m_current_estimate_exists = true;
-            //TODO: if time since last update > threshold, m_current_estimate_exists = false
+            m_current_estimate_last_update = balloons.header.stamp;
+            m_current_estimate_n_updates = 1;
           }
-        }
-    
-        if (m_current_estimate_exists)
-        {
-          std_msgs::Header header;
-          header.frame_id = m_world_frame;
-          header.stamp = balloons.header.stamp;
-          m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
-          ROS_INFO("[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x(), m_current_estimate.y(), m_current_estimate.z());
         }
       }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
-      std::cout << "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms" << std::endl;
-  
-      ROS_INFO("[%s]: New data processed", m_node_name.c_str());
+      ROS_INFO_STREAM_THROTTLE(1.0, "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
+      ROS_INFO_THROTTLE(1.0, "[%s]: New data processed", m_node_name.c_str());
+    }
+
+    if ((ros::Time::now() - m_current_estimate_last_update).toSec() >= m_max_time_since_update)
+    {
+      reset_current_estimate();
+    }
+
+    if (m_current_estimate_exists && m_current_estimate_n_updates > m_min_updates_to_confirm)
+    {
+      std_msgs::Header header;
+      header.frame_id = m_world_frame;
+      header.stamp = m_current_estimate_last_update;
+      m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
+      ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x(), m_current_estimate.y(), m_current_estimate.z());
     }
   }
   //}
@@ -119,12 +128,16 @@ namespace balloon_planner
       return ret;
   
     ret.reserve(balloon_msg.points.size());
-    for (const auto& rpt : balloon_msg.points)
+    for (size_t it = 0; it < balloon_msg.points.size(); it++)
     {
-      Eigen::Vector3d pt(rpt.x, rpt.y, rpt.z);
-      pt = s2w_tf*pt;
-      if (point_valid(pt))
+      const auto rpt = balloon_msg.points[it];
+      const auto dist_qual = balloon_msg.channels.at(0).values.at(it);
+      if (point_valid(rpt, dist_qual))
+      {
+        Eigen::Vector3d pt(rpt.x, rpt.y, rpt.z);
+        pt = s2w_tf*pt;
         ret.push_back(pt);
+      }
     }
   
     return ret;
@@ -132,13 +145,21 @@ namespace balloon_planner
   //}
 
   /* point_valid() method //{ */
-  bool BalloonPlanner::point_valid(const Eigen::Vector3d& pt)
+  bool BalloonPlanner::point_valid(const geometry_msgs::Point32& pt, float dist_quality)
   {
-    const bool height_valid = pt.z() > m_min_balloon_height;
+    const bool height_valid = pt.z > m_min_balloon_height;
+    const bool dist_valid = dist_quality == 3.0f;
   
-    return height_valid;
+    return height_valid && dist_valid;
   }
   //}
+
+  void BalloonPlanner::reset_current_estimate()
+  {
+    m_current_estimate_exists = false;
+    m_current_estimate_last_update = ros::Time::now();
+    m_current_estimate_n_updates = 0;
+  }
 
 /* onInit() //{ */
 
@@ -159,6 +180,8 @@ void BalloonPlanner::onInit()
   pl.load_param("min_balloon_height", m_min_balloon_height);
   pl.load_param("filter_coeff", m_filter_coeff);
   pl.load_param("gating_distance", m_gating_distance);
+  pl.load_param("max_time_since_update", m_max_time_since_update);
+  pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
 
   if (!pl.loaded_successfully())
   {
@@ -202,7 +225,7 @@ void BalloonPlanner::onInit()
 
   //}
 
-  m_current_estimate_exists = false;
+  reset_current_estimate();
   m_is_initialized = true;
 
   /* timers  //{ */
