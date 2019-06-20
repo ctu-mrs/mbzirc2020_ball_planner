@@ -13,9 +13,14 @@
 
 #include <sensor_msgs/PointCloud.h>
 
+// Eigen
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
+
 // Geometry msgs
 #include <geometry_msgs/TransformStamped.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
+/* #include <geometry_msgs/PoseWithCovarianceStamped.h> */
+#include <geometry_msgs/PoseStamped.h>
 
 // Nav msgs
 #include <nav_msgs/Odometry.h>
@@ -64,6 +69,9 @@ namespace balloon_planner
 
       /* Parameters, loaded from ROS //{ */
       std::string m_world_frame;
+      std::string m_uav_frame_id;
+      double m_min_balloon_height;
+      double m_filter_coeff;
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */
@@ -71,9 +79,14 @@ namespace balloon_planner
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
       mrs_lib::SubscribeHandlerPtr<sensor_msgs::PointCloud> m_sh_balloons;
-      ros::Publisher m_pub_odom_balloon;
+
+      ros::Publisher m_pub_chosen_balloon;
+
       ros::Timer m_main_loop_timer;
       //}
+
+      bool m_current_estimate_exists;
+      Eigen::Vector3d m_current_estimate;
 
     private:
 
@@ -97,6 +110,15 @@ namespace balloon_planner
         return true;
       }
       //}
+
+      bool point_valid(const Eigen::Vector3d& pt);
+
+      geometry_msgs::PoseStamped to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header);
+      Eigen::Vector3d get_cur_mav_pos();
+      Eigen::Vector3d find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& m_current_estimate);
+      Eigen::Vector3d find_closest(const std::vector<Eigen::Vector3d>& balloons_positions);
+
+      std::vector<Eigen::Vector3d> message_to_positions(const sensor_msgs::PointCloud& balloon_msg);
 
   };
   

@@ -11,21 +11,107 @@ namespace balloon_planner
       sensor_msgs::PointCloud balloons = m_sh_balloons->get_data();
   
       ROS_INFO("[%s]: Processing %lu new detections", m_node_name.c_str(), balloons.points.size());
-  
-      // Construct a new world to sensor transform
-      Eigen::Affine3d s2w_tf;
-      bool tf_ok = get_transform_to_world(balloons.header.frame_id, balloons.header.stamp, s2w_tf);
-  
-      if (!tf_ok)
-        return;
 
-
-  
+      if (balloons.points.size() > 0)
+      {
+        auto balloons_positions = message_to_positions(balloons);
+        Eigen::Vector3d closest_balloon;
+        if (m_current_estimate_exists)
+        {
+          closest_balloon = find_closest_to(balloons_positions, m_current_estimate);
+          m_current_estimate = m_filter_coeff*m_current_estimate + (1 - m_filter_coeff)*closest_balloon;
+        } else
+        {
+          closest_balloon = find_closest(balloons_positions);
+          m_current_estimate = closest_balloon;
+        }
+    
+        std_msgs::Header header;
+        header.frame_id = m_world_frame;
+        header.stamp = balloons.header.stamp;
+        m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
+      }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
       std::cout << "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms" << std::endl;
   
       ROS_INFO("[%s]: New data processed", m_node_name.c_str());
     }
+  }
+  //}
+
+  geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header)
+  {
+    geometry_msgs::PoseStamped ret;
+
+    ret.header = header;
+    ret.pose.position.x = position_estimate.x();
+    ret.pose.position.y = position_estimate.y();
+    ret.pose.position.z = position_estimate.z();
+
+    return ret;
+  }
+
+  Eigen::Vector3d BalloonPlanner::get_cur_mav_pos()
+  {
+    Eigen::Affine3d m2w_tf;
+    bool tf_ok = get_transform_to_world(m_uav_frame_id, ros::Time::now(), m2w_tf);
+    if (!tf_ok)
+      return Eigen::Vector3d(0, 0, 0);;
+    return m2w_tf.translation();
+  }
+
+  Eigen::Vector3d BalloonPlanner::find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position)
+  {
+    double min_dist = std::numeric_limits<double>::infinity();
+    Eigen::Vector3d closest_pt;
+    for (const auto& pt : balloons_positions)
+    {
+      const double cur_dist = (to_position - pt).norm();
+      if (cur_dist < min_dist)
+      {
+        min_dist = cur_dist;
+        closest_pt = pt;
+      }
+    }
+    return closest_pt;
+  }
+
+  Eigen::Vector3d BalloonPlanner::find_closest(const std::vector<Eigen::Vector3d>& balloons_positions)
+  {
+    Eigen::Vector3d cur_pos = get_cur_mav_pos();
+    return find_closest_to(balloons_positions, cur_pos);
+  }
+
+  /* message_to_positions() method //{ */
+  std::vector<Eigen::Vector3d> BalloonPlanner::message_to_positions(const sensor_msgs::PointCloud& balloon_msg)
+  {
+    std::vector<Eigen::Vector3d> ret;
+  
+    // Construct a new world to sensor transform
+    Eigen::Affine3d s2w_tf;
+    bool tf_ok = get_transform_to_world(balloon_msg.header.frame_id, balloon_msg.header.stamp, s2w_tf);
+    if (!tf_ok)
+      return ret;
+  
+    ret.reserve(balloon_msg.points.size());
+    for (const auto& rpt : balloon_msg.points)
+    {
+      Eigen::Vector3d pt(rpt.x, rpt.y, rpt.z);
+      pt = s2w_tf*pt;
+      if (point_valid(pt))
+        ret.push_back(pt);
+    }
+  
+    return ret;
+  }
+  //}
+
+  /* point_valid() method //{ */
+  bool BalloonPlanner::point_valid(const Eigen::Vector3d& pt)
+  {
+    const bool height_valid = pt.z() > m_min_balloon_height;
+  
+    return height_valid;
   }
   //}
 
@@ -44,6 +130,9 @@ void BalloonPlanner::onInit()
 
   double planning_period = pl.load_param2<double>("planning_period");
   pl.load_param("world_frame", m_world_frame);
+  pl.load_param("uav_frame_id", m_uav_frame_id);
+  pl.load_param("min_balloon_height", m_min_balloon_height);
+  pl.load_param("filter_coeff", m_filter_coeff);
 
   if (!pl.loaded_successfully())
   {
@@ -77,7 +166,7 @@ void BalloonPlanner::onInit()
 
   /* publishers //{ */
 
-  m_pub_odom_balloon = nh.advertise<nav_msgs::Odometry>("balloon_odom_out", 1);
+  m_pub_chosen_balloon = nh.advertise<geometry_msgs::PointStamped>("balloon_chosen_out", 1);
 
   //}
 
@@ -87,6 +176,7 @@ void BalloonPlanner::onInit()
 
   //}
 
+  m_current_estimate_exists = false;
   m_is_initialized = true;
 
   /* timers  //{ */

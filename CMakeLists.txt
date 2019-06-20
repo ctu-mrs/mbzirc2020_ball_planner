@@ -14,6 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   )
 
+# include Eigen3
+find_package(Eigen3 REQUIRED)
+
 generate_dynamic_reconfigure_options(
   config/PlanningParams.cfg
   )
@@ -34,7 +37,9 @@ catkin_package(
 # include_directories(include)
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS})
+  ${catkin_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
+  )
 
 ## Declare a C++ executable
 add_library(BalloonPlanner
