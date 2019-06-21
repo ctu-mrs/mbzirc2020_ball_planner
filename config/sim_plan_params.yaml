@@ -1,7 +1,7 @@
 planning_period: 0.01 # seconds
-world_frame: "local_origin_stable"
+world_frame: "local_origin"
 min_balloon_height: 1.0 # meters
-filter_coeff: 0.9
+filter_coeff: 0.5
 gating_distance: 2.0 # meters
 max_time_since_update: 2.0 # seconds
-min_updates_to_confirm: 30
+min_updates_to_confirm: 10

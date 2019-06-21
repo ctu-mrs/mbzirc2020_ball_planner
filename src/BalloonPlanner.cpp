@@ -158,7 +158,7 @@ namespace balloon_planner
   bool BalloonPlanner::point_valid(const geometry_msgs::Point32& pt, float dist_quality)
   {
     const bool height_valid = pt.z > m_min_balloon_height;
-    const bool dist_valid = dist_quality == 3.0f;
+    const bool dist_valid = dist_quality >= 1.0f;
   
     return height_valid && dist_valid;
   }
