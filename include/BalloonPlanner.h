@@ -77,6 +77,7 @@ namespace balloon_planner
       double m_gating_distance;
       double m_max_time_since_update;
       double m_min_updates_to_confirm;
+      int m_min_dist_quality;
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */

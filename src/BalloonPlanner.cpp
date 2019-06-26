@@ -163,7 +163,7 @@ namespace balloon_planner
   bool BalloonPlanner::point_valid(const Eigen::Vector3d& pt, float dist_quality)
   {
     const bool height_valid = pt.z() > m_min_balloon_height;
-    const bool dist_valid = dist_quality == 3.0f;
+    const bool dist_valid = dist_quality >= m_min_dist_quality;
   
     return height_valid && dist_valid;
   }
@@ -187,6 +187,7 @@ namespace balloon_planner
     m_gating_distance = cfg.gating_distance;
     m_max_time_since_update = cfg.max_time_since_update;
     m_min_updates_to_confirm = cfg.min_updates_to_confirm;
+    m_min_dist_quality = cfg.min_dist_quality;
   }
   //}
 
@@ -211,6 +212,7 @@ void BalloonPlanner::onInit()
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
+  pl.load_param("min_dist_quality", m_min_dist_quality);
 
   if (!pl.loaded_successfully())
   {

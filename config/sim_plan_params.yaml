@@ -5,3 +5,4 @@ filter_coeff: 0.9
 gating_distance: 2.0 # meters
 max_time_since_update: 2.0 # seconds
 min_updates_to_confirm: 30
+min_dist_quality: 1 # 0 corresponds to no estimate, 1 is only from blob size, 2 is only from depthmap and 3 is both
