@@ -24,20 +24,24 @@ namespace balloon_planner
           meas_valid = find_closest_to(balloons_positions, m_current_estimate, closest_balloon, true);
           if (meas_valid)
           {
+            ROS_INFO_THROTTLE(1.0, "[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_balloon.x(), closest_balloon.y(), closest_balloon.z());
             m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon;
             m_current_estimate_last_update = balloons.header.stamp;
             m_current_estimate_n_updates++;
           }
+          ROS_INFO_THROTTLE(1.0, "[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x(), m_current_estimate.y(), m_current_estimate.z());
         } else
         {
           meas_valid = find_closest(balloons_positions, closest_balloon);
           if (meas_valid)
           {
+            ROS_INFO_THROTTLE(1.0, "[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_balloon.x(), closest_balloon.y(), closest_balloon.z());
             m_current_estimate = closest_balloon;
             m_current_estimate_exists = true;
             m_current_estimate_last_update = balloons.header.stamp;
             m_current_estimate_n_updates = 1;
           }
+          ROS_INFO_THROTTLE(1.0, "[%s]: No point is valid for estimate initialization", m_node_name.c_str());
         }
       }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
@@ -141,11 +145,12 @@ namespace balloon_planner
     for (size_t it = 0; it < balloon_msg.points.size(); it++)
     {
       const auto rpt = balloon_msg.points[it];
+      Eigen::Vector3d pt(rpt.x, rpt.y, rpt.z);
+      pt = s2w_tf*pt;
       const auto dist_qual = balloon_msg.channels.at(0).values.at(it);
-      if (point_valid(rpt, dist_qual))
+      if (point_valid(pt, dist_qual))
       {
-        Eigen::Vector3d pt(rpt.x, rpt.y, rpt.z);
-        pt = s2w_tf*pt;
+        ROS_INFO_THROTTLE(1.0, "[%s]: Skipping invalid point [%.2f, %.2f, %.2f], dist.qual.: %.0f", m_node_name.c_str(), pt.x(), pt.y(), pt.z(), dist_qual);
         ret.push_back(pt);
       }
     }
@@ -155,9 +160,9 @@ namespace balloon_planner
   //}
 
   /* point_valid() method //{ */
-  bool BalloonPlanner::point_valid(const geometry_msgs::Point32& pt, float dist_quality)
+  bool BalloonPlanner::point_valid(const Eigen::Vector3d& pt, float dist_quality)
   {
-    const bool height_valid = pt.z > m_min_balloon_height;
+    const bool height_valid = pt.z() > m_min_balloon_height;
     const bool dist_valid = dist_quality == 3.0f;
   
     return height_valid && dist_valid;

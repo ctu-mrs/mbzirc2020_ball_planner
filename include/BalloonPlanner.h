@@ -120,7 +120,7 @@ namespace balloon_planner
       }
       //}
 
-      bool point_valid(const geometry_msgs::Point32& pt, float dist_quality);
+      bool point_valid(const Eigen::Vector3d& pt, float dist_quality);
 
       void reset_current_estimate();
       geometry_msgs::PoseStamped to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header);
