@@ -17,28 +17,10 @@ namespace balloon_planner
       if (balloons.points.size() > 0)
       {
         auto balloons_positions = message_to_positions(balloons);
-        bool meas_valid = false;
-        Eigen::Vector3d closest_balloon;
         if (m_current_estimate_exists)
-        {
-          meas_valid = find_closest_to(balloons_positions, m_current_estimate, closest_balloon, true);
-          if (meas_valid)
-          {
-            m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon;
-            m_current_estimate_last_update = balloons.header.stamp;
-            m_current_estimate_n_updates++;
-          }
-        } else
-        {
-          meas_valid = find_closest(balloons_positions, closest_balloon);
-          if (meas_valid)
-          {
-            m_current_estimate = closest_balloon;
-            m_current_estimate_exists = true;
-            m_current_estimate_last_update = balloons.header.stamp;
-            m_current_estimate_n_updates = 1;
-          }
-        }
+          update_current_estimate(balloons_positions, balloons.header.stamp);
+        else
+          init_current_estimate(balloons_positions, balloons.header.stamp);
       }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
       ROS_INFO_STREAM_THROTTLE(1.0, "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
@@ -57,6 +39,35 @@ namespace balloon_planner
       header.stamp = m_current_estimate_last_update;
       m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
       ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x(), m_current_estimate.y(), m_current_estimate.z());
+    }
+  }
+  //}
+
+  /* update_current_estimate() method //{ */
+  void BalloonPlanner::update_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp)
+  {
+    Eigen::Vector3d closest_balloon;
+    bool meas_valid = find_closest_to(balloons_positions, m_current_estimate, closest_balloon, true);
+    if (meas_valid)
+    {
+      m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon;
+      m_current_estimate_last_update = stamp;
+      m_current_estimate_n_updates++;
+    }
+  }
+  //}
+
+  /* init_current_estimate() method //{ */
+  void BalloonPlanner::init_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp)
+  {
+    Eigen::Vector3d closest_balloon;
+    bool meas_valid = find_closest(balloons_positions, closest_balloon);
+    if (meas_valid)
+    {
+      m_current_estimate = closest_balloon;
+      m_current_estimate_exists = true;
+      m_current_estimate_last_update = stamp;
+      m_current_estimate_n_updates = 1;
     }
   }
   //}

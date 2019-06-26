@@ -122,6 +122,8 @@ namespace balloon_planner
 
       bool point_valid(const geometry_msgs::Point32& pt, float dist_quality);
 
+      void update_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp);
+      void init_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp);
       void reset_current_estimate();
       geometry_msgs::PoseStamped to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header);
       Eigen::Vector3d get_cur_mav_pos();
