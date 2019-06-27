@@ -17,8 +17,8 @@
 
 // Geometry msgs
 #include <geometry_msgs/TransformStamped.h>
-/* #include <geometry_msgs/PoseWithCovarianceStamped.h> */
-#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+/* #include <geometry_msgs/PoseStamped.h> */
 
 // Nav msgs
 #include <nav_msgs/Odometry.h>
@@ -146,7 +146,7 @@ namespace balloon_planner
       void update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp);
       void init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp);
       void reset_current_estimate();
-      geometry_msgs::PoseStamped to_output_message(const pos_t& estimate, const std_msgs::Header& header);
+      geometry_msgs::PoseWithCovarianceStamped to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header);
       pos_t get_cur_mav_pos();
       bool find_closest_to(const std::vector<pos_cov_t>& measurements, const pos_t& to_position, pos_cov_t& closest_out, bool use_gating = false);
       bool find_closest(const std::vector<pos_cov_t>& measurements, pos_cov_t& closest_out);

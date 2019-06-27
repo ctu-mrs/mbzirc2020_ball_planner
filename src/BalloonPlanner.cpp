@@ -37,7 +37,7 @@ namespace balloon_planner
       std_msgs::Header header;
       header.frame_id = m_world_frame;
       header.stamp = m_current_estimate_last_update;
-      m_pub_chosen_balloon.publish(to_output_message(m_current_estimate.x, header));
+      m_pub_chosen_balloon.publish(to_output_message({m_current_estimate.x, m_current_estimate.P}, header));
       ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
     }
   }
@@ -79,15 +79,28 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const pos_t& estimate, const std_msgs::Header& header)
+  geometry_msgs::PoseWithCovarianceStamped BalloonPlanner::to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header)
   {
-    geometry_msgs::PoseStamped ret;
+    geometry_msgs::PoseWithCovarianceStamped ret;
   
     ret.header = header;
-    ret.pose.position.x = estimate.x();
-    ret.pose.position.y = estimate.y();
-    ret.pose.position.z = estimate.z();
+    ret.pose.pose.position.x = estimate.pos.x();
+    ret.pose.pose.position.y = estimate.pos.y();
+    ret.pose.pose.position.z = estimate.pos.z();
   
+    for (int r = 0; r < 6; r++)
+    {
+      for (int c = 0; c < 6; c++)
+      {
+        if (r < 3 && c < 3)
+          ret.pose.covariance[r * 6 + c] = estimate.cov(r, c);
+        else if (r == c)
+          ret.pose.covariance[r * 6 + c] = 666;
+        else
+          ret.pose.covariance[r * 6 + c] = 0.0;
+      }
+    }
+
     return ret;
   }
   //}
@@ -250,6 +263,7 @@ void BalloonPlanner::onInit()
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
+  pl.load_param("process_noise_std", m_process_noise_std);
 
   if (!pl.loaded_successfully())
   {
@@ -285,7 +299,7 @@ void BalloonPlanner::onInit()
 
   /* publishers //{ */
 
-  m_pub_chosen_balloon = nh.advertise<geometry_msgs::PointStamped>("balloon_chosen_out", 1);
+  m_pub_chosen_balloon = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("balloon_chosen_out", 1);
 
   //}
 
