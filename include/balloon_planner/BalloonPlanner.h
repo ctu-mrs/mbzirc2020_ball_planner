@@ -105,6 +105,7 @@ namespace balloon_planner
       mrs_lib::SubscribeHandlerPtr<detections_t> m_sh_balloons;
 
       ros::Publisher m_pub_chosen_balloon;
+      ros::Publisher m_pub_used_meas;
 
       ros::ServiceServer m_reset_chosen_server;
 
@@ -143,8 +144,8 @@ namespace balloon_planner
       cov_t rotate_covariance(const cov_t& covariance, const cov_t& rotation);
       bool point_valid(const pos_t& pt);
 
-      void update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp);
-      void init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp);
+      bool update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas);
+      bool init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas);
       void reset_current_estimate();
       geometry_msgs::PoseWithCovarianceStamped to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header);
       pos_t get_cur_mav_pos();

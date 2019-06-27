@@ -17,10 +17,24 @@ namespace balloon_planner
       if (balloons.poses.size() > 0)
       {
         auto measurements = message_to_positions(balloons);
+        pos_cov_t used_meas;
+        bool used_meas_valid = false;
         if (m_current_estimate_exists)
-          update_current_estimate(measurements, balloons.header.stamp);
+          used_meas_valid = update_current_estimate(measurements, balloons.header.stamp, used_meas);
         else
-          init_current_estimate(measurements, balloons.header.stamp);
+          used_meas_valid = init_current_estimate(measurements, balloons.header.stamp, used_meas);
+
+        /* publish the used measurement for debugging and visualisation purposes //{ */
+        
+        if (used_meas_valid)
+        {
+          std_msgs::Header header;
+          header.frame_id = m_world_frame;
+          header.stamp = m_current_estimate_last_update;
+          m_pub_used_meas.publish(to_output_message(used_meas, header));
+        }
+        
+        //}
       }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
       ROS_INFO_STREAM_THROTTLE(1.0, "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
@@ -44,7 +58,7 @@ namespace balloon_planner
   //}
 
   /* update_current_estimate() method //{ */
-  void BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp)
+  bool BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas)
   {
     pos_cov_t closest_meas;
     bool meas_valid = find_closest_to(measurements, m_current_estimate.x, closest_meas, true);
@@ -52,22 +66,25 @@ namespace balloon_planner
     {
       ROS_INFO_THROTTLE(1.0, "[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - m_current_estimate_last_update).toSec();
-      m_current_estimate.R = dt*m_process_noise_std*Lkf::R_t::Identity();
+      m_current_estimate.Q = dt*m_process_noise_std*Lkf::R_t::Identity();
       m_current_estimate.prediction_step();
       m_current_estimate.z = closest_meas.pos;
+      m_current_estimate.R = closest_meas.cov;
       m_current_estimate.correction_step();
       /* m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon; */
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates++;
+      used_meas = closest_meas;
     } else
     {
       ROS_INFO_THROTTLE(1.0, "[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
     }
+    return meas_valid;
   }
   //}
 
   /* init_current_estimate() method //{ */
-  void BalloonPlanner::init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp)
+  bool BalloonPlanner::init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas)
   {
     pos_cov_t closest_meas;
     bool meas_valid = find_closest(measurements, closest_meas);
@@ -79,10 +96,12 @@ namespace balloon_planner
       m_current_estimate_exists = true;
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates = 1;
+      used_meas = closest_meas;
     } else
     {
       ROS_INFO_THROTTLE(1.0, "[%s]: No point is valid for estimate initialization", m_node_name.c_str());
     }
+    return meas_valid;
   }
   //}
 
@@ -95,6 +114,10 @@ namespace balloon_planner
     ret.pose.pose.position.x = estimate.pos.x();
     ret.pose.pose.position.y = estimate.pos.y();
     ret.pose.pose.position.z = estimate.pos.z();
+    ret.pose.pose.orientation.x = 0.0;
+    ret.pose.pose.orientation.y = 0.0;
+    ret.pose.pose.orientation.z = 0.0;
+    ret.pose.pose.orientation.w = 1.0;
   
     for (int r = 0; r < 6; r++)
     {
@@ -310,6 +333,7 @@ void BalloonPlanner::onInit()
   /* publishers //{ */
 
   m_pub_chosen_balloon = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("balloon_chosen_out", 1);
+  m_pub_used_meas = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("balloon_detection_used", 1);
 
   //}
 
