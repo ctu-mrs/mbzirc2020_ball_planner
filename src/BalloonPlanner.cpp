@@ -50,6 +50,7 @@ namespace balloon_planner
     bool meas_valid = find_closest_to(measurements, m_current_estimate.x, closest_meas, true);
     if (meas_valid)
     {
+      ROS_INFO_THROTTLE(1.0, "[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - m_current_estimate_last_update).toSec();
       m_current_estimate.R = dt*m_process_noise_std*Lkf::R_t::Identity();
       m_current_estimate.prediction_step();
@@ -58,6 +59,9 @@ namespace balloon_planner
       /* m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon; */
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates++;
+    } else
+    {
+      ROS_INFO_THROTTLE(1.0, "[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
     }
   }
   //}
@@ -69,11 +73,15 @@ namespace balloon_planner
     bool meas_valid = find_closest(measurements, closest_meas);
     if (meas_valid)
     {
+      ROS_INFO_THROTTLE(1.0, "[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       m_current_estimate.x = closest_meas.pos;
       m_current_estimate.P = closest_meas.cov;
       m_current_estimate_exists = true;
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates = 1;
+    } else
+    {
+      ROS_INFO_THROTTLE(1.0, "[%s]: No point is valid for estimate initialization", m_node_name.c_str());
     }
   }
   //}
@@ -182,6 +190,9 @@ namespace balloon_planner
         const cov_t cov = rotate_covariance(msg2cov(msg_cov), s2w_rot);
         const pos_cov_t pos_cov{pos, cov};
         ret.push_back(pos_cov);
+      } else
+      {
+        ROS_INFO_THROTTLE(1.0, "[%s]: Skipping invalid point [%.2f, %.2f, %.2f]", m_node_name.c_str(), pos.x(), pos.y(), pos.z());
       }
     }
   
@@ -216,7 +227,6 @@ namespace balloon_planner
   bool BalloonPlanner::point_valid(const pos_t& pt)
   {
     const bool height_valid = pt.z() > m_min_balloon_height;
-  
     return height_valid;
   }
   //}
