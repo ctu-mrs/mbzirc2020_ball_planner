@@ -12,35 +12,38 @@ namespace balloon_planner
     {
       const auto balloons = m_sh_balloons->get_data();
   
-      ROS_INFO_THROTTLE(1.0, "[%s]: Processing %lu new detections", m_node_name.c_str(), balloons.poses.size());
-
-      if (balloons.poses.size() > 0)
+      if (!balloons.poses.empty())
       {
+        ROS_INFO("[%s]: Processing %lu new detections vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", m_node_name.c_str(), balloons.poses.size());
         auto measurements = message_to_positions(balloons);
-        pos_cov_t used_meas;
-        bool used_meas_valid = false;
-        if (m_current_estimate_exists)
-          used_meas_valid = update_current_estimate(measurements, balloons.header.stamp, used_meas);
-        else
-          used_meas_valid = init_current_estimate(measurements, balloons.header.stamp, used_meas);
-
-        /* publish the used measurement for debugging and visualisation purposes //{ */
-        
-        if (used_meas_valid)
+        if (!measurements.empty())
         {
-          std_msgs::Header header;
-          header.frame_id = m_world_frame;
-          header.stamp = m_current_estimate_last_update;
-          m_pub_used_meas.publish(to_output_message(used_meas, header));
-        }
-        
-        //}
-      }
-      ros::Duration del = ros::Time::now() - balloons.header.stamp;
-      ROS_INFO_STREAM_THROTTLE(1.0, "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
-      ROS_INFO_THROTTLE(1.0, "[%s]: New data processed", m_node_name.c_str());
-    }
+          pos_cov_t used_meas;
+          bool used_meas_valid = false;
+          if (m_current_estimate_exists)
+            used_meas_valid = update_current_estimate(measurements, balloons.header.stamp, used_meas);
+          else
+            used_meas_valid = init_current_estimate(measurements, balloons.header.stamp, used_meas);
 
+          /* publish the used measurement for debugging and visualisation purposes //{ */
+          if (used_meas_valid)
+          {
+            std_msgs::Header header;
+            header.frame_id = m_world_frame;
+            header.stamp = m_current_estimate_last_update;
+            m_pub_used_meas.publish(to_output_message(used_meas, header));
+          }
+          //}
+
+        }
+        ros::Duration del = ros::Time::now() - balloons.header.stamp;
+        ROS_INFO_STREAM("delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
+        ROS_INFO("[%s]: New data processed          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", m_node_name.c_str());
+      } else
+      {
+        ROS_INFO_THROTTLE(1.0, "[%s]: Empty detections message received", m_node_name.c_str());
+      }
+    }
     if ((ros::Time::now() - m_current_estimate_last_update).toSec() >= m_max_time_since_update)
     {
       reset_current_estimate();
@@ -64,7 +67,7 @@ namespace balloon_planner
     bool meas_valid = find_closest_to(measurements, m_current_estimate.x, closest_meas, true);
     if (meas_valid)
     {
-      ROS_INFO_THROTTLE(1.0, "[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
+      ROS_INFO("[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - m_current_estimate_last_update).toSec();
       m_current_estimate.Q = dt*m_process_noise_std*Lkf::R_t::Identity();
       m_current_estimate.prediction_step();
@@ -77,7 +80,7 @@ namespace balloon_planner
       used_meas = closest_meas;
     } else
     {
-      ROS_INFO_THROTTLE(1.0, "[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
+      ROS_INFO("[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
     }
     return meas_valid;
   }
@@ -90,7 +93,7 @@ namespace balloon_planner
     bool meas_valid = find_closest(measurements, closest_meas);
     if (meas_valid)
     {
-      ROS_INFO_THROTTLE(1.0, "[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
+      ROS_INFO("[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       m_current_estimate.x = closest_meas.pos;
       m_current_estimate.P = closest_meas.cov;
       m_current_estimate_exists = true;
@@ -99,7 +102,7 @@ namespace balloon_planner
       used_meas = closest_meas;
     } else
     {
-      ROS_INFO_THROTTLE(1.0, "[%s]: No point is valid for estimate initialization", m_node_name.c_str());
+      ROS_INFO("[%s]: No point is valid for estimate initialization", m_node_name.c_str());
     }
     return meas_valid;
   }
@@ -215,7 +218,7 @@ namespace balloon_planner
         ret.push_back(pos_cov);
       } else
       {
-        ROS_INFO_THROTTLE(1.0, "[%s]: Skipping invalid point [%.2f, %.2f, %.2f]", m_node_name.c_str(), pos.x(), pos.y(), pos.z());
+        ROS_INFO("[%s]: Skipping invalid point [%.2f, %.2f, %.2f] (original: [%.2f %.2f %.2f])", m_node_name.c_str(), pos.x(), pos.y(), pos.z(), msg_pos.position.x, msg_pos.position.y, msg_pos.position.z);
       }
     }
   
@@ -250,7 +253,8 @@ namespace balloon_planner
   bool BalloonPlanner::point_valid(const pos_t& pt)
   {
     const bool height_valid = pt.z() > m_min_balloon_height;
-    return height_valid;
+    const bool sane_values = !pt.array().isNaN().any() && !pt.array().isInf().any();
+    return height_valid && sane_values;
   }
   //}
 
@@ -260,7 +264,7 @@ namespace balloon_planner
     m_current_estimate_exists = false;
     m_current_estimate_last_update = ros::Time::now();
     m_current_estimate_n_updates = 0;
-    ROS_INFO("[%s]: Current chosen balloon reset.", m_node_name.c_str());
+    ROS_INFO("[%s]: Current chosen balloon ==RESET==.", m_node_name.c_str());
   }
   //}
 
