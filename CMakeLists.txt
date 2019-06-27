@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_lib
   pcl_ros
   message_generation
+  object_detect
   )
 
 # include Eigen3
@@ -56,7 +57,9 @@ include_directories(
 
 ## Declare a C++ executable
 add_library(BalloonPlanner
-  src/BalloonPlanner.cpp)
+  src/Lkf.cpp
+  src/BalloonPlanner.cpp
+  )
 
 add_dependencies(BalloonPlanner
   ${${PROJECT_NAME}_EXPORTED_TARGETS}

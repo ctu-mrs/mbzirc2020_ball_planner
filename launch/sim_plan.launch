@@ -19,10 +19,10 @@
       <rosparam file="$(find balloon_planner)/config/sim_plan_params.yaml" command="load" />
 
       <!-- Subscribers -->
-      <remap from="~balloon_cloud_in" to="object_detect/detected_objects" />
+      <remap from="~balloon_detections" to="object_detect/detected_objects_" />
 
       <!-- Publishers -->
-      <!-- <remap from="~balloon_chosen_out" to="balloon_chosen_out" /> -->
+      <remap from="~balloon_chosen_out" to="~balloon_chosen_out_" />
 
     </node>
 

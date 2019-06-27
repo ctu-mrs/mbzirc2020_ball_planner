@@ -11,8 +11,6 @@
 #include <tf2_eigen/tf2_eigen.h>
 #include <nodelet/nodelet.h>
 
-#include <sensor_msgs/PointCloud.h>
-
 // Eigen
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -35,8 +33,11 @@
 #include <string>
 #include <mutex>
 
+// local includes
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_planner/ResetChosen.h>
+#include <balloon_planner/Lkf.h>
+#include <object_detect/PoseWithCovarianceArrayStamped.h>
 
 //}
 
@@ -45,6 +46,23 @@ namespace balloon_planner
   // shortcut type to the dynamic reconfigure manager template instance
   using drcfg_t = balloon_planner::PlanningParamsConfig;
   using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
+  constexpr int lkf_n_states = 3;
+  constexpr int lkf_n_inputs = 0;
+  constexpr int lkf_n_measurements = 3;
+  using Lkf = Lkf_base<lkf_n_states, lkf_n_inputs, lkf_n_measurements>;
+
+  using detections_t = object_detect::PoseWithCovarianceArrayStamped;
+  using ros_poses_t = detections_t::_poses_type;
+  using ros_pose_t = ros_poses_t::value_type::_pose_type;
+  using ros_cov_t = ros_poses_t::value_type::_covariance_type;
+
+  using pos_t = Eigen::Matrix<double, lkf_n_states, 1>;
+  using cov_t = Eigen::Matrix<double, lkf_n_states, lkf_n_states>;
+  struct pos_cov_t
+  {
+    pos_t pos;
+    cov_t cov;
+  };
 
   /* //{ class BalloonPlanner */
 
@@ -77,13 +95,14 @@ namespace balloon_planner
       double m_gating_distance;
       double m_max_time_since_update;
       double m_min_updates_to_confirm;
+      double m_process_noise_std;
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */
       std::unique_ptr<drmgr_t> m_drmgr_ptr;
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-      mrs_lib::SubscribeHandlerPtr<sensor_msgs::PointCloud> m_sh_balloons;
+      mrs_lib::SubscribeHandlerPtr<detections_t> m_sh_balloons;
 
       ros::Publisher m_pub_chosen_balloon;
 
@@ -93,7 +112,7 @@ namespace balloon_planner
       //}
 
       bool m_current_estimate_exists;
-      Eigen::Vector3d m_current_estimate;
+      Lkf m_current_estimate;
       ros::Time m_current_estimate_last_update;
       int m_current_estimate_n_updates;
 
@@ -120,17 +139,19 @@ namespace balloon_planner
       }
       //}
 
-      bool point_valid(const geometry_msgs::Point32& pt, float dist_quality);
+      cov_t msg2cov(const ros_cov_t& msg_cov);
+      cov_t rotate_covariance(const cov_t& covariance, const cov_t& rotation);
+      bool point_valid(const pos_t& pt);
 
-      void update_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp);
-      void init_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp);
+      void update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp);
+      void init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp);
       void reset_current_estimate();
-      geometry_msgs::PoseStamped to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header);
-      Eigen::Vector3d get_cur_mav_pos();
-      bool find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position, Eigen::Vector3d& closest_out, bool use_gating = false);
-      bool find_closest(const std::vector<Eigen::Vector3d>& balloons_positions, Eigen::Vector3d& closest_out);
+      geometry_msgs::PoseStamped to_output_message(const pos_t& estimate, const std_msgs::Header& header);
+      pos_t get_cur_mav_pos();
+      bool find_closest_to(const std::vector<pos_cov_t>& measurements, const pos_t& to_position, pos_cov_t& closest_out, bool use_gating = false);
+      bool find_closest(const std::vector<pos_cov_t>& measurements, pos_cov_t& closest_out);
 
-      std::vector<Eigen::Vector3d> message_to_positions(const sensor_msgs::PointCloud& balloon_msg);
+      std::vector<pos_cov_t> message_to_positions(const detections_t& balloon_msg);
 
       bool reset_chosen_callback(balloon_planner::ResetChosen::Request& req, balloon_planner::ResetChosen::Response& resp);
       void load_dynparams(drcfg_t cfg);

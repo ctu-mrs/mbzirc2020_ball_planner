@@ -1,4 +1,4 @@
-#include "BalloonPlanner.h"
+#include <balloon_planner/BalloonPlanner.h>
 
 namespace balloon_planner
 {
@@ -10,17 +10,17 @@ namespace balloon_planner
 
     if (m_sh_balloons->new_data())
     {
-      sensor_msgs::PointCloud balloons = m_sh_balloons->get_data();
+      const auto balloons = m_sh_balloons->get_data();
   
-      ROS_INFO_THROTTLE(1.0, "[%s]: Processing %lu new detections", m_node_name.c_str(), balloons.points.size());
+      ROS_INFO_THROTTLE(1.0, "[%s]: Processing %lu new detections", m_node_name.c_str(), balloons.poses.size());
 
-      if (balloons.points.size() > 0)
+      if (balloons.poses.size() > 0)
       {
-        auto balloons_positions = message_to_positions(balloons);
+        auto measurements = message_to_positions(balloons);
         if (m_current_estimate_exists)
-          update_current_estimate(balloons_positions, balloons.header.stamp);
+          update_current_estimate(measurements, balloons.header.stamp);
         else
-          init_current_estimate(balloons_positions, balloons.header.stamp);
+          init_current_estimate(measurements, balloons.header.stamp);
       }
       ros::Duration del = ros::Time::now() - balloons.header.stamp;
       ROS_INFO_STREAM_THROTTLE(1.0, "delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
@@ -37,20 +37,25 @@ namespace balloon_planner
       std_msgs::Header header;
       header.frame_id = m_world_frame;
       header.stamp = m_current_estimate_last_update;
-      m_pub_chosen_balloon.publish(to_output_message(m_current_estimate, header));
-      ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x(), m_current_estimate.y(), m_current_estimate.z());
+      m_pub_chosen_balloon.publish(to_output_message(m_current_estimate.x, header));
+      ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
     }
   }
   //}
 
   /* update_current_estimate() method //{ */
-  void BalloonPlanner::update_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp)
+  void BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp)
   {
-    Eigen::Vector3d closest_balloon;
-    bool meas_valid = find_closest_to(balloons_positions, m_current_estimate, closest_balloon, true);
+    pos_cov_t closest_meas;
+    bool meas_valid = find_closest_to(measurements, m_current_estimate.x, closest_meas, true);
     if (meas_valid)
     {
-      m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon;
+      const double dt = (stamp - m_current_estimate_last_update).toSec();
+      m_current_estimate.R = dt*m_process_noise_std*Lkf::R_t::Identity();
+      m_current_estimate.prediction_step();
+      m_current_estimate.z = closest_meas.pos;
+      m_current_estimate.correction_step();
+      /* m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon; */
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates++;
     }
@@ -58,13 +63,14 @@ namespace balloon_planner
   //}
 
   /* init_current_estimate() method //{ */
-  void BalloonPlanner::init_current_estimate(const std::vector<Eigen::Vector3d>& balloons_positions, const ros::Time& stamp)
+  void BalloonPlanner::init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp)
   {
-    Eigen::Vector3d closest_balloon;
-    bool meas_valid = find_closest(balloons_positions, closest_balloon);
+    pos_cov_t closest_meas;
+    bool meas_valid = find_closest(measurements, closest_meas);
     if (meas_valid)
     {
-      m_current_estimate = closest_balloon;
+      m_current_estimate.x = closest_meas.pos;
+      m_current_estimate.P = closest_meas.cov;
       m_current_estimate_exists = true;
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates = 1;
@@ -73,38 +79,41 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const Eigen::Vector3d& position_estimate, const std_msgs::Header& header)
+  geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const pos_t& estimate, const std_msgs::Header& header)
   {
     geometry_msgs::PoseStamped ret;
   
     ret.header = header;
-    ret.pose.position.x = position_estimate.x();
-    ret.pose.position.y = position_estimate.y();
-    ret.pose.position.z = position_estimate.z();
+    ret.pose.position.x = estimate.x();
+    ret.pose.position.y = estimate.y();
+    ret.pose.position.z = estimate.z();
   
     return ret;
   }
   //}
 
   /* get_cur_mav_pos() method //{ */
-  Eigen::Vector3d BalloonPlanner::get_cur_mav_pos()
+  pos_t BalloonPlanner::get_cur_mav_pos()
   {
     Eigen::Affine3d m2w_tf;
     bool tf_ok = get_transform_to_world(m_uav_frame_id, ros::Time::now(), m2w_tf);
     if (!tf_ok)
-      return Eigen::Vector3d(0, 0, 0);;
+      return pos_t(0, 0, 0);;
     return m2w_tf.translation();
   }
   //}
 
   /* find_closest_to() method //{ */
-  bool BalloonPlanner::find_closest_to(const std::vector<Eigen::Vector3d>& balloons_positions, const Eigen::Vector3d& to_position, Eigen::Vector3d& closest_out, bool use_gating)
+  bool BalloonPlanner::find_closest_to(const std::vector<pos_cov_t>& measurements, const pos_t& to_position, pos_cov_t& closest_out, bool use_gating)
   {
     double min_dist = std::numeric_limits<double>::infinity();
-    Eigen::Vector3d closest_pt(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
-    for (const auto& pt : balloons_positions)
+    pos_cov_t closest_pt{
+       std::numeric_limits<double>::quiet_NaN()*pos_t::Ones(),
+       std::numeric_limits<double>::quiet_NaN()*cov_t::Ones()
+    };
+    for (const auto& pt : measurements)
     {
-      const double cur_dist = (to_position - pt).norm();
+      const double cur_dist = (to_position - pt.pos).norm();
       if (cur_dist < min_dist)
       {
         min_dist = cur_dist;
@@ -130,34 +139,36 @@ namespace balloon_planner
   //}
 
   /* find_closest() method //{ */
-  bool BalloonPlanner::find_closest(const std::vector<Eigen::Vector3d>& balloons_positions, Eigen::Vector3d& closest_out)
+  bool BalloonPlanner::find_closest(const std::vector<pos_cov_t>& measuremets, pos_cov_t& closest_out)
   {
-    Eigen::Vector3d cur_pos = get_cur_mav_pos();
-    return find_closest_to(balloons_positions, cur_pos, closest_out, false);
+    pos_t cur_pos = get_cur_mav_pos();
+    return find_closest_to(measuremets, cur_pos, closest_out, false);
   }
   //}
 
   /* message_to_positions() method //{ */
-  std::vector<Eigen::Vector3d> BalloonPlanner::message_to_positions(const sensor_msgs::PointCloud& balloon_msg)
+  std::vector<pos_cov_t> BalloonPlanner::message_to_positions(const detections_t& balloon_msg)
   {
-    std::vector<Eigen::Vector3d> ret;
+    std::vector<pos_cov_t> ret;
   
     // Construct a new world to sensor transform
     Eigen::Affine3d s2w_tf;
     bool tf_ok = get_transform_to_world(balloon_msg.header.frame_id, balloon_msg.header.stamp, s2w_tf);
     if (!tf_ok)
       return ret;
+    const Eigen::Matrix3d s2w_rot = s2w_tf.rotation();
   
-    ret.reserve(balloon_msg.points.size());
-    for (size_t it = 0; it < balloon_msg.points.size(); it++)
+    ret.reserve(balloon_msg.poses.size());
+    for (size_t it = 0; it < balloon_msg.poses.size(); it++)
     {
-      const auto rpt = balloon_msg.points[it];
-      const auto dist_qual = balloon_msg.channels.at(0).values.at(it);
-      if (point_valid(rpt, dist_qual))
+      const auto msg_pos = balloon_msg.poses[it].pose;
+      const auto msg_cov = balloon_msg.poses[it].covariance;
+      const pos_t pos = s2w_tf*pos_t(msg_pos.position.x, msg_pos.position.y, msg_pos.position.z);
+      if (point_valid(pos))
       {
-        Eigen::Vector3d pt(rpt.x, rpt.y, rpt.z);
-        pt = s2w_tf*pt;
-        ret.push_back(pt);
+        const cov_t cov = rotate_covariance(msg2cov(msg_cov), s2w_rot);
+        const pos_cov_t pos_cov{pos, cov};
+        ret.push_back(pos_cov);
       }
     }
   
@@ -165,13 +176,35 @@ namespace balloon_planner
   }
   //}
 
-  /* point_valid() method //{ */
-  bool BalloonPlanner::point_valid(const geometry_msgs::Point32& pt, float dist_quality)
+  /* msg2cov() method //{ */
+  cov_t BalloonPlanner::msg2cov(const ros_cov_t& msg_cov)
   {
-    const bool height_valid = pt.z > m_min_balloon_height;
-    const bool dist_valid = dist_quality == 3.0f;
+    cov_t cov;
+    for (int r = 0; r < 3; r++)
+    {
+      for (int c = 0; c < 3; c++)
+      {
+        cov(r, c) = msg_cov[r * 6 + c];
+      }
+    }
+    return cov;
+  }
+  //}
+
+  /* rotate_covariance() method //{ */
+  cov_t BalloonPlanner::rotate_covariance(const cov_t& covariance, const cov_t& rotation)
+  {
+    return rotation * covariance * rotation.transpose();  // rotate the covariance to point in direction of est. position
+  }
+  //}
+
+
+  /* point_valid() method //{ */
+  bool BalloonPlanner::point_valid(const pos_t& pt)
+  {
+    const bool height_valid = pt.z() > m_min_balloon_height;
   
-    return height_valid && dist_valid;
+    return height_valid;
   }
   //}
 
@@ -238,7 +271,8 @@ void BalloonPlanner::onInit()
 
   m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
   mrs_lib::SubscribeMgr smgr(nh);
-  m_sh_balloons = smgr.create_handler_threadsafe<sensor_msgs::PointCloud>("balloon_cloud_in", 10, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+  constexpr bool time_consistent = true;
+  m_sh_balloons = smgr.create_handler_threadsafe<detections_t, time_consistent>("balloon_detections", 10, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
 
   if (!smgr.loaded_successfully())
   {
@@ -261,6 +295,15 @@ void BalloonPlanner::onInit()
 
   //}
 
+  {
+    Lkf::A_t A = Lkf::A_t::Identity();
+    Lkf::B_t B;
+    Lkf::H_t H = Lkf::H_t::Identity();
+    Lkf::P_t P = std::numeric_limits<double>::quiet_NaN()*Lkf::P_t::Identity();
+    Lkf::Q_t Q = m_process_noise_std*m_process_noise_std*Lkf::Q_t::Identity();
+    Lkf::R_t R = std::numeric_limits<double>::quiet_NaN()*Lkf::R_t::Identity();
+    m_current_estimate = Lkf(A, B, H, P, Q, R);
+  }
   reset_current_estimate();
   m_is_initialized = true;
 
