@@ -28,14 +28,6 @@ enum
 // indices of the measurement interpretations
 enum
 {
-  u_x = 0, // 3D x-coordinate of the ball position
-  u_y,     // 3D y-coordinate of the ball position
-  u_z,     // 3D z-coordinate of the ball position
-};
-
-// indices of the measurement interpretations
-enum
-{
   z_x = 0, // 3D x-coordinate of the ball position
   z_y,     // 3D y-coordinate of the ball position
   z_z,     // 3D z-coordinate of the ball position
@@ -44,13 +36,16 @@ enum
 using Quat = Eigen::Quaterniond;
 using Vec3 = Eigen::Vector3d;
 
-x_t tra_model_f(const x_t& in, const u_t& u, const double dt)
+x_t tra_model_f(const x_t& in, [[maybe_unused]] const u_t& u, const double dt)
 {
   x_t out;
 
   // Calculate the complete current state with redundant variables
   const double speed = in(x_s);
   const double yaw = in(x_yaw);
+  const double curv = in(x_c);
+  const double dcurv = in(x_dc);
+  const double ang_speed = curv*speed;
   const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
   const Vec3 vel_eight(speed*cos(yaw), speed*sin(yaw), 0.0);
   const Vec3 vel_world = quat * vel_eight;
@@ -58,8 +53,24 @@ x_t tra_model_f(const x_t& in, const u_t& u, const double dt)
 
   // Calculate the next estimated state
   const Vec3 n_pos_world = pos_world + vel_world*dt; // TODO: take into account the curvature as well!
+  const double n_speed = speed; // assume constant speed
+  const double n_yaw = yaw + ang_speed*dt;
+  const double n_curv = curv + dcurv*dt;
+  const double n_dcurv = dcurv; // no model of a curvature derivative changing
   const Quat n_quat = quat; // does not change
 
+  // Copy the calculated values to the respective states
+  out(x_x) = n_pos_world.x();
+  out(x_y) = n_pos_world.y();
+  out(x_z) = n_pos_world.z();
+  out(x_s) = n_speed;
+  out(x_yaw) = n_yaw;
+  out(x_c) = n_curv;
+  out(x_dc) = n_dcurv;
+  out(x_qw) = n_quat.w();
+  out(x_qx) = n_quat.x();
+  out(x_qy) = n_quat.y();
+  out(x_qz) = n_quat.z();
 
   return out;
 }
