@@ -28,7 +28,7 @@ def main():
     lin_cutoff = 1.0 # metres, how much of the radius will be cut-off in favour of the linear segment
 
     # parameters of the sampling
-    sample_dist = 0.25 # metres
+    sample_dist = 0.5 # metres
 
     ### ARCS
     # half of the angle of the circle sector, which is cut off by the linear segments
@@ -98,34 +98,16 @@ def main():
 
         samples[it, :] = cur_sample
 
-    # l_arc_angs = np.arange(l_arc_start_ang, l_arc_end_ang, sample_ang)
-    # r_arc_angs = np.arange(np.pi - arc_ang, -np.pi + arc_ang, -sample_ang)
-    # l_arc_samps = sample_arc(l_arc_orig, radius, l_arc_angs)
-    # r_arc_samps = sample_arc(r_arc_orig, radius, r_arc_angs)
-
-    # l_line_samps = sample_line(l_line_start, l_line_end, sample_dist, False, True)
-    # r_line_samps = sample_line(r_line_start, r_line_end, sample_dist, False, True)
-
-    # plt.plot(l_arc_samps[:, 0], l_arc_samps[:, 1], 'x')
-    # plt.plot(r_arc_samps[:, 0], r_arc_samps[:, 1], 'x')
-    # plt.plot(l_line_samps[:, 0], l_line_samps[:, 1], 'x')
-    # plt.plot(r_line_samps[:, 0], r_line_samps[:, 1], 'x')
-    # plt.axis('equal')
-    # plt.show()
-
-    # all_samps = np.vstack([l_arc_samps, l_line_samps, r_arc_samps, r_line_samps])
     plt.plot(samples[:, 0], samples[:, 1])
     plt.plot(samples[:, 0], samples[:, 1], 'x')
     plt.axis('equal')
-    # plt.xlim([0, 10])
-    # plt.ylim([-4, 4])
     plt.show()
 
-    # for it in range(0, len(all_samps)):
-    #     plt.plot(all_samps[:it, 0], all_samps[:it, 1], 'x')
+    # for it in range(0, len(samples)):
+    #     plt.plot(samples[:it, 0], samples[:it, 1], 'x')
     #     plt.axis('equal')
-    #     plt.xlim([0, 10])
-    #     plt.ylim([-4, 4])
+    #     plt.xlim([-15, 15])
+    #     plt.ylim([-10, 10])
     #     plt.show()
 
 
