@@ -21,6 +21,39 @@ def sample_line(line_start, line_end, sample_dist):
     pt = line_start + dir*sample_dist
     return pt
 
+def rpy_to_R(roll, pitch, yaw):
+    roll_mat = np.matrix([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+
+    pitch_mat = np.matrix([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+
+    yaw_mat = np.matrix([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+
+    R = yaw_mat*pitch_mat*roll_mat
+    return R
+
+def save_data(data, ofname, col_names):
+    with open(ofname, 'w') as of:
+        txt = ",".join(col_names)
+        of.write("{:s}\n".format(txt))
+        rows = data.shape[0]
+        for it in range(0, rows):
+            row = data[it, :]
+            txt = ",".join(map(str, row))
+            of.write("{:s}\n".format(txt))
+
+
 def main():
     # parameters of the pattern
     radius = 5.5 # metres
@@ -29,6 +62,10 @@ def main():
 
     # parameters of the sampling
     sample_dist = 0.5 # metres
+
+    # parameters of transformation of the eight pattern
+    pattern_rotation_rpy = [1.0, 2.0, 0.5] # radians
+    pattern_translation  = [5.0, -3.0, 4.0] # metres
 
     ### ARCS
     # half of the angle of the circle sector, which is cut off by the linear segments
@@ -97,6 +134,12 @@ def main():
             cur_sample = sample_line(r_line_start, r_line_end, cur_sector_dist)
 
         samples[it, :] = cur_sample
+    
+    samples3D = np.hstack([samples, np.zeros(n_pts, 1)])
+    R = rpy_to_R(pattern_rotation_rpy[0], pattern_rotation_rpy[1], pattern_rotation_rpy[2])
+    # TODO: rotate the samples, translate the samples
+
+    save_data(samples, "data.csv", ["x", "y", "z"])
 
     plt.plot(samples[:, 0], samples[:, 1])
     plt.plot(samples[:, 0], samples[:, 1], 'x')
