@@ -69,3 +69,17 @@ add_dependencies(BalloonPlanner
 target_link_libraries(BalloonPlanner
   ${catkin_LIBRARIES}
   )
+
+## Declare a C++ executable
+add_executable(eight_ukf
+  src/eight_ukf.cpp
+  )
+
+add_dependencies(eight_ukf
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS})
+
+## Specify libraries to link a library or executable target against
+target_link_libraries(eight_ukf
+  ${catkin_LIBRARIES}
+  )
