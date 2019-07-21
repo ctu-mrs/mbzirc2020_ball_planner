@@ -2,6 +2,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # Point on a circle, defined by an angle
 def circle_point_ang(orig, radius, angle):
@@ -135,15 +136,21 @@ def main():
 
         samples[it, :] = cur_sample
     
-    samples3D = np.hstack([samples, np.zeros(n_pts, 1)])
+    samples3D = np.hstack([samples, np.zeros((n_pts, 1))])
     R = rpy_to_R(pattern_rotation_rpy[0], pattern_rotation_rpy[1], pattern_rotation_rpy[2])
-    # TODO: rotate the samples, translate the samples
+    samples3D = np.dot(R, samples3D.transpose())
+    trans = np.matrix([pattern_translation]).transpose()
+    samples3D += trans
+    samples3D = np.array(samples3D.transpose())
 
-    save_data(samples, "data.csv", ["x", "y", "z"])
+    save_data(samples3D, "data.csv", ["x", "y", "z"])
 
-    plt.plot(samples[:, 0], samples[:, 1])
-    plt.plot(samples[:, 0], samples[:, 1], 'x')
-    plt.axis('equal')
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten())
+    ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten(), 'x')
+    # ax.axis('equal')
+    ax.set_aspect('equal')
     plt.show()
 
     # for it in range(0, len(samples)):
