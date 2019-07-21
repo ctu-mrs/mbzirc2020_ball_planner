@@ -15,6 +15,11 @@ def sample_arc(orig, radius, start_ang, sample_dist, orientation = 1):
     pt = circle_point_ang(orig, radius, angle)
     return pt
 
+def sample_arc_tangent(orig, radius, start_ang, sample_dist, orientation = 1):
+    angle = start_ang + orientation*(sample_dist/radius)
+    tangent = angle + orientation*np.pi/2.0
+    return tangent
+
 def sample_line(line_start, line_end, sample_dist):
     vec = line_end - line_start
     dist = np.linalg.norm(vec)
@@ -22,11 +27,16 @@ def sample_line(line_start, line_end, sample_dist):
     pt = line_start + dir*sample_dist
     return pt
 
-def rpy_to_R(roll, pitch, yaw):
-    roll_mat = np.matrix([
-        [1, 0, 0],
-        [0, np.cos(roll), -np.sin(roll)],
-        [0, np.sin(roll), np.cos(roll)]
+def sample_line_tangent(line_start, line_end, sample_dist):
+    vec = line_end - line_start
+    tangent = np.arctan2(vec[1], vec[0])
+    return tangent
+
+def ypr_to_R(yaw, pitch, roll):
+    yaw_mat = np.matrix([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
     ])
 
     pitch_mat = np.matrix([
@@ -35,14 +45,22 @@ def rpy_to_R(roll, pitch, yaw):
         [-np.sin(pitch), 0, np.cos(pitch)]
     ])
 
-    yaw_mat = np.matrix([
-        [np.cos(yaw), -np.sin(yaw), 0],
-        [np.sin(yaw), np.cos(yaw), 0],
-        [0, 0, 1]
+    roll_mat = np.matrix([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
     ])
 
-    R = yaw_mat*pitch_mat*roll_mat
+    R = roll_mat*pitch_mat*yaw_mat
     return R
+
+# from https://stackoverflow.com/questions/53033620/how-to-convert-euler-angles-to-quaternions-and-get-the-same-euler-angles-back-fr?rq=1
+def ypr_to_quaternion(yaw, pitch, roll):
+        qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+        qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+        qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+        qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+        return [qw, qx, qy, qz]
 
 def save_data(data, ofname, col_names):
     with open(ofname, 'w') as of:
@@ -54,7 +72,6 @@ def save_data(data, ofname, col_names):
             txt = ",".join(map(str, row))
             of.write("{:s}\n".format(txt))
 
-
 def main():
     # parameters of the pattern
     radius = 5.5 # metres
@@ -65,7 +82,7 @@ def main():
     sample_dist = 0.5 # metres
 
     # parameters of transformation of the eight pattern
-    pattern_rotation_rpy = [1.0, 2.0, 0.5] # radians
+    pattern_rotation_ypr = [1.0, 2.0, 0.5] # radians
     pattern_translation  = [5.0, -3.0, 4.0] # metres
 
     ### ARCS
@@ -110,6 +127,8 @@ def main():
     sample_dist = tot_len/n_pts
 
     samples = np.zeros((n_pts, 2))
+    yaws = np.zeros((n_pts, 1))
+    curvatures = np.zeros((n_pts, 1))
     for it in range(0, n_pts):
         sector = 0 # sector 0 is the first (left) arc
         cur_dist = (it*sample_dist) % tot_len # current distance traveled along the eight-pattern
@@ -125,25 +144,43 @@ def main():
             cur_sector_dist = cur_dist - (2*arc_len + line_len)
 
         cur_sample = None
+        cur_yaw = None
+        cur_curvature = None
         if sector == 0:
             cur_sample = sample_arc(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
+            cur_yaw = sample_arc_tangent(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
+            cur_curvature = 1.0/radius
         elif sector == 1:
             cur_sample = sample_line(l_line_start, l_line_end, cur_sector_dist)
+            cur_yaw = sample_line_tangent(l_line_start, l_line_end, cur_sector_dist)
+            cur_curvature = 0.0
         elif sector == 2:
             cur_sample = sample_arc(r_arc_orig, radius, r_arc_start_ang, cur_sector_dist, -1)
+            cur_yaw = sample_arc_tangent(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
+            cur_curvature = -1.0/radius
         elif sector == 3:
             cur_sample = sample_line(r_line_start, r_line_end, cur_sector_dist)
+            cur_yaw = sample_line_tangent(l_line_start, l_line_end, cur_sector_dist)
+            cur_curvature = 0.0
 
         samples[it, :] = cur_sample
+        yaws[it, :] = cur_yaw
+        curvatures[it, :] = cur_curvature
     
     samples3D = np.hstack([samples, np.zeros((n_pts, 1))])
-    R = rpy_to_R(pattern_rotation_rpy[0], pattern_rotation_rpy[1], pattern_rotation_rpy[2])
+    R = ypr_to_R(pattern_rotation_ypr[0], pattern_rotation_ypr[1], pattern_rotation_ypr[2])
     samples3D = np.dot(R, samples3D.transpose())
     trans = np.matrix([pattern_translation]).transpose()
     samples3D += trans
     samples3D = np.array(samples3D.transpose())
 
-    save_data(samples3D, "data.csv", ["x", "y", "z"])
+    speeds = sample_dist*np.ones((n_pts, 1)) # assuming dt = 1s
+
+    data = np.hstack([samples3D, yaws, speeds, curvatures])
+    save_data(data, "data.csv", ["x", "y", "z", "yaw", "s", "c"])
+
+    quat = ypr_to_quaternion(pattern_rotation_ypr[0], pattern_rotation_ypr[1], pattern_rotation_ypr[2])
+    print("Corresponding quaternion: [{:f}, {:f}, {:f}, {:f}]".format(quat[0], quat[1], quat[2], quat[3]))
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')

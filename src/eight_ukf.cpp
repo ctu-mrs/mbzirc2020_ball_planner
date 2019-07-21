@@ -22,7 +22,6 @@ namespace balloon_planner
     x_s,     // the ball speed
     x_yaw,   // yaw of the MAV in the eight-plane
     x_c,     // curvature of the MAV trajectory in the eight-plane
-    x_dc,    // derivative of curvature of the MAV trajectory in the eight-plane
     x_qw,    // w element of quaterion, defining rotation from world frame to the eight-plane frame
     x_qx,    // x element of quaterion, defining rotation from world frame to the eight-plane frame
     x_qy,    // y element of quaterion, defining rotation from world frame to the eight-plane frame
@@ -48,7 +47,6 @@ namespace balloon_planner
     const double speed = in(x_s);
     const double yaw = in(x_yaw);
     const double curv = in(x_c);
-    const double dcurv = in(x_dc);
     const double ang_speed = curv*speed;
     const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
     const Vec3 vel_eight(speed*cos(yaw), speed*sin(yaw), 0.0);
@@ -59,8 +57,7 @@ namespace balloon_planner
     const Vec3 n_pos_world = pos_world + vel_world*dt; // TODO: take into account the curvature as well!
     const double n_speed = speed; // assume constant speed
     const double n_yaw = yaw + ang_speed*dt;
-    const double n_curv = curv + dcurv*dt;
-    const double n_dcurv = dcurv; // no model of a curvature derivative changing
+    const double n_curv = curv;
     const Quat n_quat = quat; // does not change
 
     // Copy the calculated values to the respective states
@@ -70,7 +67,6 @@ namespace balloon_planner
     out(x_s) = n_speed;
     out(x_yaw) = n_yaw;
     out(x_c) = n_curv;
-    out(x_dc) = n_dcurv;
     out(x_qw) = n_quat.w();
     out(x_qx) = n_quat.x();
     out(x_qy) = n_quat.y();
@@ -89,7 +85,20 @@ namespace balloon_planner
     return observation;
   }
 
+  UKF::x_t normalize_state(const UKF::x_t& in)
+  {
+    UKF::x_t out = in;
+    out(x_yaw) = std::fmod(in(x_yaw), 2*M_PI);
+    out(x_c) = std::fmod(in(x_c), 2*M_PI);
+    if (out(x_c) > M_PI)
+      out(x_c) -= 2*M_PI;
+    // TODO: normalize the quaternion as well?
+    return out;
+  }
 }
+
+
+
 #include <iostream>
 #include <fstream>
 
@@ -133,6 +142,7 @@ int main()
   const char delim = ',';
   const Eigen::MatrixXd pts = load_csv<Eigen::MatrixXd>(fname, delim, true);
   const int n_pts = pts.rows();
+  const int cols = pts.cols();
   std::cout << "Loaded " << n_pts << " points" << std::endl;
 
   Q_t Q = Q_t::Identity();
@@ -140,8 +150,7 @@ int main()
   Q(3, 3) *= 2e-1;
   Q(4, 4) *= 1e-1;
   Q(5, 5) *= 5e-1;
-  Q(6, 6) *= 1e-1;
-  Q.block<4, 4>(7, 7) *= 1e-1;
+  Q.block<4, 4>(6, 6) *= 1e-1;
   tra_model_t tra_model(tra_model_f);
   obs_model_t obs_model(obs_model_f);
 
@@ -156,7 +165,6 @@ int main()
       0.5,
       0,
       0,
-      0,
       1,
       0,
       0,
@@ -168,11 +176,14 @@ int main()
   for (int it = 0; it < n_pts; it++)
   {
     std::cout << "iteration " << it << std::endl;
+    const auto cur_gt = pts.block(it, 0, 1, cols).transpose();
     const auto cur_pt = pts.block<1, 3>(it, 0).transpose();
     sc = ukf.predict(sc, u_t(), 1.0);
+    sc.x = normalize_state(sc.x);
     sc = ukf.correct(sc, cur_pt, R);
+    sc.x = normalize_state(sc.x);
+    std::cout << "state ground-truth: " << std::endl << cur_gt.transpose() << std::endl;
     std::cout << "state estimate: " << std::endl << sc.x.transpose() << std::endl;
     std::cout << "state covariance: " << std::endl << sc.P << std::endl;
-    std::cout << "state ground-truth: " << std::endl << cur_pt.transpose() << std::endl;
   }
 }
