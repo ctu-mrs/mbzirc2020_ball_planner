@@ -53,26 +53,15 @@ namespace balloon_planner
     // Calculate the complete current state with redundant variables
     const double yaw = in(x_yaw);
     const double speed = in(x_s);
-    const double curv = in(x_c);
-    const double ang_speed = curv*speed;
-    const double nori = sign(curv); // orienation of the circle normal
-    std::cout << "curv: " << curv << ", nori: " << nori << std::endl;
-    /* const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized(); */
-    /* const Quat quat = Quat(1, 0, 0, 0); */
     // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
     const Vec3 vel_tang = Vec3(speed*cos(yaw), speed*sin(yaw), 0.0);
-    const Vec3 norm(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
-    const Vec3 acc_norm = curv*speed*speed*norm;
-    const Vec3 dpos_eight = vel_tang*dt + 0.5*acc_norm*dt*dt;
-    /* const Vec3 dpos_world = quat*dpos_eight; */
-    const Vec3 dpos_world = dpos_eight;
+    const Vec3 dpos = vel_tang*dt;
     const Vec3 pos_world(in(x_x), in(x_y), in(x_z));
 
     // Calculate the next estimated state
-    const Vec3 n_pos_world = pos_world + dpos_world;
+    const Vec3 n_pos_world = pos_world + dpos;
     const double n_speed = speed; // assume constant speed
-    const double n_yaw = yaw + ang_speed*dt;
-    const double n_curv = curv;
+    const double n_yaw = yaw;
     /* const Quat n_quat = quat; // does not change */
 
     // Copy the calculated values to the respective states
@@ -81,7 +70,6 @@ namespace balloon_planner
     out(x_z) = n_pos_world.z();
     out(x_yaw) = n_yaw;
     out(x_s) = n_speed;
-    out(x_c) = n_curv;
     /* out(x_qw) = n_quat.w(); */
     /* out(x_qx) = n_quat.x(); */
     /* out(x_qy) = n_quat.y(); */
@@ -114,7 +102,7 @@ namespace balloon_planner
   {
     UKF::x_t out = in;
     out(x_yaw) = normalize_angle(in(x_yaw));
-    out(x_c) = normalize_angle(in(x_c));
+    /* out(x_c) = normalize_angle(in(x_c)); */
     // TODO: normalize the quaternion as well?
     return out;
   }
@@ -173,7 +161,7 @@ int main()
   Q.block<3, 3>(0, 0) *= 1e0;
   Q(3, 3) *= 2e-1;
   Q(4, 4) *= 1e-1;
-  Q(5, 5) *= 5e-1;
+  /* Q(5, 5) *= 5e-1; */
   /* Q.block<4, 4>(6, 6) *= 1e-1; */
   tra_model_t tra_model(tra_model_f);
   obs_model_t obs_model(obs_model_f);
@@ -186,8 +174,8 @@ int main()
       0,
       0,
       0,
-      0,
       0.5,
+      /* 0.5, */
       /* 0, */
       /* 1, */
       /* 0, */

@@ -5,7 +5,7 @@
   <arg name="print_debug" default="true" />
 
   <arg unless="$(arg debug)" name="launch_prefix" value=""/>
-  <arg     if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
+  <arg     if="$(arg debug)" name="launch_prefix" value="debug_roslaunch"/>
 
   <group if="$(arg print_debug)">
   <env name="ROSCONSOLE_CONFIG_FILE" value="$(find balloon_planner)/config/rosconsole/debug.conf"/>
