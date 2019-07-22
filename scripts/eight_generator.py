@@ -74,7 +74,7 @@ def save_data(data, ofname, col_names):
 
 def main():
     # parameters of the pattern
-    radius = 5.5 # metres
+    radius = 0.5 # metres
     width = 25   # metres
     lin_cutoff = 1.0 # metres, how much of the radius will be cut-off in favour of the linear segment
 
@@ -82,7 +82,7 @@ def main():
     sample_dist = 0.5 # metres
 
     # parameters of transformation of the eight pattern
-    pattern_rotation_ypr = [1.0, 2.0, 0.5] # radians
+    pattern_rotation_ypr = [0.0, 0.0, 0.0] # radians
     pattern_translation  = [5.0, -3.0, 4.0] # metres
 
     ### ARCS
@@ -149,7 +149,7 @@ def main():
         if sector == 0:
             cur_sample = sample_arc(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
             cur_yaw = sample_arc_tangent(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
-            cur_curvature = 1.0/radius
+            cur_curvature = -1.0/radius
         elif sector == 1:
             cur_sample = sample_line(l_line_start, l_line_end, cur_sector_dist)
             cur_yaw = sample_line_tangent(l_line_start, l_line_end, cur_sector_dist)
@@ -157,7 +157,7 @@ def main():
         elif sector == 2:
             cur_sample = sample_arc(r_arc_orig, radius, r_arc_start_ang, cur_sector_dist, -1)
             cur_yaw = sample_arc_tangent(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
-            cur_curvature = -1.0/radius
+            cur_curvature = 1.0/radius
         elif sector == 3:
             cur_sample = sample_line(r_line_start, r_line_end, cur_sector_dist)
             cur_yaw = sample_line_tangent(l_line_start, l_line_end, cur_sector_dist)

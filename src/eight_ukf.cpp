@@ -19,8 +19,8 @@ namespace balloon_planner
     x_x = 0, // 3D x-coordinate of the ball position
     x_y,     // 3D y-coordinate of the ball position
     x_z,     // 3D z-coordinate of the ball position
-    x_s,     // the ball speed
     x_yaw,   // yaw of the MAV in the eight-plane
+    x_s,     // the ball speed
     x_c,     // curvature of the MAV trajectory in the eight-plane
     x_qw,    // w element of quaterion, defining rotation from world frame to the eight-plane frame
     x_qx,    // x element of quaterion, defining rotation from world frame to the eight-plane frame
@@ -39,38 +39,53 @@ namespace balloon_planner
   using Quat = Eigen::Quaterniond;
   using Vec3 = Eigen::Vector3d;
 
+  // from https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
+  template <typename T>
+  T sign(T val)
+  {
+    return (T(0) < val) - (val < T(0));
+  }
+
   UKF::x_t tra_model_f(const UKF::x_t& in, [[maybe_unused]] const UKF::u_t& u, const double dt)
   {
     x_t out;
 
     // Calculate the complete current state with redundant variables
-    const double speed = in(x_s);
     const double yaw = in(x_yaw);
+    const double speed = in(x_s);
     const double curv = in(x_c);
     const double ang_speed = curv*speed;
-    const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
-    const Vec3 vel_eight(speed*cos(yaw), speed*sin(yaw), 0.0);
-    const Vec3 vel_world = quat * vel_eight;
+    const double nori = sign(curv); // orienation of the circle normal
+    std::cout << "curv: " << curv << ", nori: " << nori << std::endl;
+    /* const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized(); */
+    /* const Quat quat = Quat(1, 0, 0, 0); */
+    // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
+    const Vec3 vel_tang = Vec3(speed*cos(yaw), speed*sin(yaw), 0.0);
+    const Vec3 norm(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
+    const Vec3 acc_norm = curv*speed*speed*norm;
+    const Vec3 dpos_eight = vel_tang*dt + 0.5*acc_norm*dt*dt;
+    /* const Vec3 dpos_world = quat*dpos_eight; */
+    const Vec3 dpos_world = dpos_eight;
     const Vec3 pos_world(in(x_x), in(x_y), in(x_z));
 
     // Calculate the next estimated state
-    const Vec3 n_pos_world = pos_world + vel_world*dt; // TODO: take into account the curvature as well!
+    const Vec3 n_pos_world = pos_world + dpos_world;
     const double n_speed = speed; // assume constant speed
     const double n_yaw = yaw + ang_speed*dt;
     const double n_curv = curv;
-    const Quat n_quat = quat; // does not change
+    /* const Quat n_quat = quat; // does not change */
 
     // Copy the calculated values to the respective states
     out(x_x) = n_pos_world.x();
     out(x_y) = n_pos_world.y();
     out(x_z) = n_pos_world.z();
-    out(x_s) = n_speed;
     out(x_yaw) = n_yaw;
+    out(x_s) = n_speed;
     out(x_c) = n_curv;
-    out(x_qw) = n_quat.w();
-    out(x_qx) = n_quat.x();
-    out(x_qy) = n_quat.y();
-    out(x_qz) = n_quat.z();
+    /* out(x_qw) = n_quat.w(); */
+    /* out(x_qx) = n_quat.x(); */
+    /* out(x_qy) = n_quat.y(); */
+    /* out(x_qz) = n_quat.z(); */
 
     return out;
   }
@@ -85,13 +100,21 @@ namespace balloon_planner
     return observation;
   }
 
+  double normalize_angle(double in)
+  {
+    double out = std::fmod(in, 2*M_PI);
+    if (out > M_PI)
+      out -= 2*M_PI;
+    else if (out < -M_PI)
+      out += 2*M_PI;
+    return out;
+  }
+
   UKF::x_t normalize_state(const UKF::x_t& in)
   {
     UKF::x_t out = in;
-    out(x_yaw) = std::fmod(in(x_yaw), 2*M_PI);
-    out(x_c) = std::fmod(in(x_c), 2*M_PI);
-    if (out(x_c) > M_PI)
-      out(x_c) -= 2*M_PI;
+    out(x_yaw) = normalize_angle(in(x_yaw));
+    out(x_c) = normalize_angle(in(x_c));
     // TODO: normalize the quaternion as well?
     return out;
   }
@@ -145,12 +168,13 @@ int main()
   const int cols = pts.cols();
   std::cout << "Loaded " << n_pts << " points" << std::endl;
 
+  const double dt = 1.0;
   Q_t Q = Q_t::Identity();
   Q.block<3, 3>(0, 0) *= 1e0;
   Q(3, 3) *= 2e-1;
   Q(4, 4) *= 1e-1;
   Q(5, 5) *= 5e-1;
-  Q.block<4, 4>(6, 6) *= 1e-1;
+  /* Q.block<4, 4>(6, 6) *= 1e-1; */
   tra_model_t tra_model(tra_model_f);
   obs_model_t obs_model(obs_model_f);
 
@@ -162,12 +186,12 @@ int main()
       0,
       0,
       0,
+      0,
       0.5,
-      0,
-      0,
-      1,
-      0,
-      0,
+      /* 0, */
+      /* 1, */
+      /* 0, */
+      /* 0, */
       0
       ).finished()
       );
@@ -178,7 +202,7 @@ int main()
     std::cout << "iteration " << it << std::endl;
     const auto cur_gt = pts.block(it, 0, 1, cols).transpose();
     const auto cur_pt = pts.block<1, 3>(it, 0).transpose();
-    sc = ukf.predict(sc, u_t(), 1.0);
+    sc = ukf.predict(sc, u_t(), dt);
     sc.x = normalize_state(sc.x);
     sc = ukf.correct(sc, cur_pt, R);
     sc.x = normalize_state(sc.x);
