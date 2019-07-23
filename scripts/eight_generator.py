@@ -54,6 +54,14 @@ def ypr_to_R(yaw, pitch, roll):
     R = roll_mat*pitch_mat*yaw_mat
     return R
 
+def normalize_angle(angle):
+    out = np.fmod(angle, 2*np.pi);
+    if out > np.pi:
+      out -= 2*np.pi
+    elif out < -np.pi:
+      out += 2*np.pi
+    return out
+
 # from https://stackoverflow.com/questions/53033620/how-to-convert-euler-angles-to-quaternions-and-get-the-same-euler-angles-back-fr?rq=1
 def ypr_to_quaternion(yaw, pitch, roll):
         qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
@@ -164,7 +172,7 @@ def main():
             cur_curvature = 0.0
 
         samples[it, :] = cur_sample
-        yaws[it, :] = cur_yaw
+        yaws[it, :] = normalize_angle(cur_yaw)
         curvatures[it, :] = cur_curvature
     
     samples3D = np.hstack([samples, np.zeros((n_pts, 1))])
@@ -182,6 +190,8 @@ def main():
     quat = ypr_to_quaternion(pattern_rotation_ypr[0], pattern_rotation_ypr[1], pattern_rotation_ypr[2])
     print("Corresponding quaternion: [{:f}, {:f}, {:f}, {:f}]".format(quat[0], quat[1], quat[2], quat[3]))
 
+    speed_check = np.linalg.norm(samples3D[1:, :] - samples3D[0:-1, :], axis=1)
+    print(speed_check)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten())
