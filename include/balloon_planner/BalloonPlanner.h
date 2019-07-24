@@ -34,9 +34,9 @@
 #include <mutex>
 
 // local includes
+#include <balloon_planner/eight_ukf.h>
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_planner/ResetChosen.h>
-#include <balloon_planner/Lkf.h>
 #include <object_detect/PoseWithCovarianceArrayStamped.h>
 
 //}
@@ -46,18 +46,14 @@ namespace balloon_planner
   // shortcut type to the dynamic reconfigure manager template instance
   using drcfg_t = balloon_planner::PlanningParamsConfig;
   using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
-  constexpr int lkf_n_states = 3;
-  constexpr int lkf_n_inputs = 0;
-  constexpr int lkf_n_measurements = 3;
-  using Lkf = Lkf_base<lkf_n_states, lkf_n_inputs, lkf_n_measurements>;
 
   using detections_t = object_detect::PoseWithCovarianceArrayStamped;
   using ros_poses_t = detections_t::_poses_type;
   using ros_pose_t = ros_poses_t::value_type::_pose_type;
   using ros_cov_t = ros_poses_t::value_type::_covariance_type;
 
-  using pos_t = Eigen::Matrix<double, lkf_n_states, 1>;
-  using cov_t = Eigen::Matrix<double, lkf_n_states, lkf_n_states>;
+  using pos_t = UKF::z_t;
+  using cov_t = UKF::R_t;
   struct pos_cov_t
   {
     pos_t pos;
@@ -112,8 +108,9 @@ namespace balloon_planner
       ros::Timer m_main_loop_timer;
       //}
 
+      UKF ukf;
       bool m_current_estimate_exists;
-      Lkf m_current_estimate;
+      UKF::statecov_t m_current_estimate;
       ros::Time m_current_estimate_last_update;
       int m_current_estimate_n_updates;
 

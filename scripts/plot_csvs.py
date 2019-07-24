@@ -137,6 +137,8 @@ def main():
     for est in ests:
         yaw = est[0, 3]
         quat = est[0, -4:]
+        length = np.linalg.norm(quat)
+        quat = quat/length
         [r, p, y] = quaternion_to_rpy(quat[0, 0], quat[0, 1], quat[0, 2], quat[0, 3])
         R = rpy_to_R(r, p, y)
         unit_vec = np.array([[np.cos(yaw)],[np.sin(yaw)],[0]])

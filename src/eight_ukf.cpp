@@ -1,8 +1,9 @@
 #include <balloon_planner/eight_ukf.h>
 
+template class mrs_lib::UKF<balloon_planner::kf_n_states, balloon_planner::kf_n_inputs, balloon_planner::kf_n_measurements>;
+
 namespace balloon_planner
 {
-
   using x_t = UKF::x_t;
   using P_t = UKF::P_t;
   using u_t = UKF::u_t;
@@ -67,7 +68,6 @@ namespace balloon_planner
     // Calculate the next estimated state
     const Vec3 n_pos_world = pos_world + quat*dpos;
     const double n_speed = speed; // assume constant speed
-    /* const double n_yaw = yaw; */
     const double n_yaw = yaw + speed*curv*dt;
     const double n_curv = curv;
     const Quat n_quat = quat; // does not change
@@ -112,14 +112,20 @@ namespace balloon_planner
     UKF::x_t out = in;
     out(x_yaw) = normalize_angle(in(x_yaw));
     // TODO: normalize the quaternion as well?
+    /* const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized(); */
+    /* out(x_qw) = quat.w(); */
+    /* out(x_qx) = quat.x(); */
+    /* out(x_qy) = quat.y(); */
+    /* out(x_qz) = quat.z(); */
     return out;
   }
 }
 
-
+#ifdef COMPILE_EIGHT_UKF_TEST
 
 #include <iostream>
 #include <fstream>
+#include <random>
 
 using namespace balloon_planner;
 
@@ -181,6 +187,21 @@ void save_csv(const M& mat, const std::string& path, const char delim = ',', con
 }
 //}
 
+/* normal_randmat() function //{ */
+template <int rows>
+Eigen::Matrix<double, rows, 1> normal_randmat(const Eigen::Matrix<double, rows, rows>& cov)
+{
+    static std::random_device rd{};
+    static std::mt19937 gen{rd()};
+    static std::normal_distribution<> d{0,1};
+    Eigen::Matrix<double, rows, 1> ret;
+    for (int row = 0; row < rows; row++)
+      ret(row, 0) = d(gen);
+    return cov*ret;
+}
+//}
+
+/* main() function for testing //{ */
 int main()
 {
   std::string fname = "data.csv";
@@ -197,14 +218,14 @@ int main()
   Q(3, 3) *= 1e-2;
   Q(4, 4) *= 1e-1;
   Q(5, 5) *= 5e-1;
-  /* Q.block<4, 4>(6, 6) *= 1e-1; */
+  Q.block<4, 4>(6, 6) *= 1e-6;
   tra_model_t tra_model(tra_model_f);
   obs_model_t obs_model(obs_model_f);
 
   UKF ukf(1e-3, 1, 2, Q, tra_model, obs_model);
 
-  const double R_std = 1e0;
-  R_t R = R_std*R_t::Identity();
+  const double R_std = 1e-1;
+  const R_t R = R_std*R_t::Identity();
   const x_t x0((x_t() << 
       0,
       0,
@@ -229,12 +250,14 @@ int main()
     const auto cur_gt = pts.block(it, 0, 1, err_states).transpose();
     const auto cur_pt = pts.block<1, 3>(it, 0).transpose();
     std::cout << "state ground-truth: " << std::endl << cur_gt.transpose() << std::endl;
+    /* const auto cur_meas = cur_pt; */
+    const auto cur_meas = cur_pt + normal_randmat(R);
 
     std::cout << "ukf state: " << std::endl << sc.x.transpose() << std::endl;
     sc = ukf.predict(sc, u_t(), dt);
     sc.x = normalize_state(sc.x);
     std::cout << "state prediction: " << std::endl << sc.x.transpose() << std::endl;
-    sc = ukf.correct(sc, cur_pt, R);
+    sc = ukf.correct(sc, cur_meas, R);
     sc.x = normalize_state(sc.x);
     const auto cur_est = sc.x.block(0, 0, err_states, 1);
     const double cur_err = (cur_gt-cur_est).norm();
@@ -249,3 +272,6 @@ int main()
 
   save_csv(est_states, "est.csv", ',', "x,y,z,yaw,speed,curvature,qw,qx,qy,qz");
 }
+//}
+
+#endif // COMPILE_EIGHT_UKF_TEST

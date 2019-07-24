@@ -69,7 +69,7 @@ namespace balloon_planner
     {
       ROS_INFO("[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - m_current_estimate_last_update).toSec();
-      m_current_estimate.Q = dt*m_process_noise_std*Lkf::R_t::Identity();
+      m_current_estimate.Q = dt*m_process_noise_std*UKF::Q_t::Identity();
       m_current_estimate.prediction_step();
       m_current_estimate.z = closest_meas.pos;
       m_current_estimate.R = closest_meas.cov;
@@ -348,13 +348,9 @@ void BalloonPlanner::onInit()
   //}
 
   {
-    Lkf::A_t A = Lkf::A_t::Identity();
-    Lkf::B_t B;
-    Lkf::H_t H = Lkf::H_t::Identity();
-    Lkf::P_t P = std::numeric_limits<double>::quiet_NaN()*Lkf::P_t::Identity();
-    Lkf::Q_t Q = m_process_noise_std*m_process_noise_std*Lkf::Q_t::Identity();
-    Lkf::R_t R = std::numeric_limits<double>::quiet_NaN()*Lkf::R_t::Identity();
-    m_current_estimate = Lkf(A, B, H, P, Q, R);
+    UKF::transition_model_t tra_model(tra_model_f);
+    UKF::observation_model_t obs_model(obs_model_f);
+    ukf = UKF(const double alpha, const double kappa, const double beta, const Q_t& Q, tra_model_f, obs_model_f);
   }
   reset_current_estimate();
   m_is_initialized = true;
