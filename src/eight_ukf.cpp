@@ -56,26 +56,21 @@ namespace balloon_planner
     const double speed = std::max(in(x_s), 0.0);
     const double curv = in(x_c);
     // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
-    /* const Vec3 tang = Vec3(1.0, 0.0, 0.0); */
-    const Vec3 tang = Vec3(cos(yaw), sin(yaw), 0.0);
-    const Vec3 norm = Vec3(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
+    const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
+    const Vec3 tang(cos(yaw), sin(yaw), 0.0);
+    const Vec3 norm(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
     const Vec3 vel_tang = speed*tang;
     const Vec3 acc_norm = curv*speed*speed*norm;
-    /* const Vec3 dpos = vel_tang*dt; */
-    /* const auto x = in(x_x) + dt*std::cos(in(x_yaw))*in(x_s); */
-    /* const auto y = in(x_y) + dt*std::sin(in(x_yaw))*in(x_s); */
-    /* const auto x = in(x_x) + dt*in(x_s); */
-    /* const auto y = in(x_y) + dt*0; */
     const Vec3 dpos = vel_tang*dt + 0.5*acc_norm*dt*dt;
     const Vec3 pos_world(in(x_x), in(x_y), in(x_z));
 
     // Calculate the next estimated state
-    const Vec3 n_pos_world = pos_world + dpos;
+    const Vec3 n_pos_world = pos_world + quat*dpos;
     const double n_speed = speed; // assume constant speed
     /* const double n_yaw = yaw; */
     const double n_yaw = yaw + speed*curv*dt;
     const double n_curv = curv;
-    /* const Quat n_quat = quat; // does not change */
+    const Quat n_quat = quat; // does not change
 
     // Copy the calculated values to the respective states
     out(x_x) = n_pos_world.x();
@@ -84,10 +79,10 @@ namespace balloon_planner
     out(x_yaw) = n_yaw;
     out(x_s) = n_speed;
     out(x_c) = n_curv;
-    /* out(x_qw) = n_quat.w(); */
-    /* out(x_qx) = n_quat.x(); */
-    /* out(x_qy) = n_quat.y(); */
-    /* out(x_qz) = n_quat.z(); */
+    out(x_qw) = n_quat.w();
+    out(x_qx) = n_quat.x();
+    out(x_qy) = n_quat.y();
+    out(x_qz) = n_quat.z();
 
     return out;
   }
@@ -189,10 +184,10 @@ int main()
       0,
       0.5,
       0.5,
-      /* 0, */
-      /* 1, */
-      /* 0, */
-      /* 0, */
+      0,
+      1,
+      0,
+      0,
       1
       ).finished()
       );

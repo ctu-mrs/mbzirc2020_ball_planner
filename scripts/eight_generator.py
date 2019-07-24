@@ -90,7 +90,7 @@ def main():
     sample_dist = 0.5 # metres
 
     # parameters of transformation of the eight pattern
-    pattern_rotation_ypr = [0.0, 0.0, 0.0] # radians
+    pattern_rotation_ypr = [1.0, 2.0, 3.0] # radians
     pattern_translation  = [5.0, -3.0, 4.0] # metres
 
     ### ARCS

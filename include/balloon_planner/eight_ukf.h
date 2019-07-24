@@ -3,7 +3,7 @@
 namespace balloon_planner
 {
   /* constexpr int kf_n_states = 10; */
-  constexpr int kf_n_states = 6;
+  constexpr int kf_n_states = 10;
   constexpr int kf_n_inputs = 0;
   constexpr int kf_n_measurements = 3;
   using UKF = mrs_lib::UKF<kf_n_states, kf_n_inputs, kf_n_measurements>;
