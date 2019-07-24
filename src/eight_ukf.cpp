@@ -38,6 +38,7 @@ namespace balloon_planner
 
   using Quat = Eigen::Quaterniond;
   using Vec3 = Eigen::Vector3d;
+  using Vec2 = Eigen::Vector2d;
 
   // from https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
   template <typename T>
@@ -52,24 +53,28 @@ namespace balloon_planner
 
     // Calculate the complete current state with redundant variables
     const double yaw = in(x_yaw);
-    const double speed = in(x_s);
-    /* const double curv = in(x_c); */
+    const double speed = std::max(in(x_s), 0.0);
+    const double curv = in(x_c);
     // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
     /* const Vec3 tang = Vec3(1.0, 0.0, 0.0); */
     const Vec3 tang = Vec3(cos(yaw), sin(yaw), 0.0);
-    /* const Vec3 norm = Vec3(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0); */
+    const Vec3 norm = Vec3(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
     const Vec3 vel_tang = speed*tang;
-    /* const Vec3 acc_norm = curv*speed*speed*norm; */
-    const Vec3 dpos = vel_tang*dt;
-    /* const Vec3 dpos = vel_tang*dt + 0.5*acc_norm*dt*dt; */
+    const Vec3 acc_norm = curv*speed*speed*norm;
+    /* const Vec3 dpos = vel_tang*dt; */
+    /* const auto x = in(x_x) + dt*std::cos(in(x_yaw))*in(x_s); */
+    /* const auto y = in(x_y) + dt*std::sin(in(x_yaw))*in(x_s); */
+    /* const auto x = in(x_x) + dt*in(x_s); */
+    /* const auto y = in(x_y) + dt*0; */
+    const Vec3 dpos = vel_tang*dt + 0.5*acc_norm*dt*dt;
     const Vec3 pos_world(in(x_x), in(x_y), in(x_z));
 
     // Calculate the next estimated state
     const Vec3 n_pos_world = pos_world + dpos;
     const double n_speed = speed; // assume constant speed
-    const double n_yaw = yaw;
-    /* const double n_yaw = yaw + speed*curv*dt; */
-    /* const double n_curv = curv; */
+    /* const double n_yaw = yaw; */
+    const double n_yaw = yaw + speed*curv*dt;
+    const double n_curv = curv;
     /* const Quat n_quat = quat; // does not change */
 
     // Copy the calculated values to the respective states
@@ -78,7 +83,7 @@ namespace balloon_planner
     out(x_z) = n_pos_world.z();
     out(x_yaw) = n_yaw;
     out(x_s) = n_speed;
-    /* out(x_c) = n_curv; */
+    out(x_c) = n_curv;
     /* out(x_qw) = n_quat.w(); */
     /* out(x_qx) = n_quat.x(); */
     /* out(x_qy) = n_quat.y(); */
@@ -167,62 +172,66 @@ int main()
   const double dt = 1.0;
   Q_t Q = Q_t::Identity();
   Q.block<3, 3>(0, 0) *= 1e0;
-  Q(3, 3) *= 2e-1;
-  /* Q(4, 4) *= 1e-1; */
-  /* Q(5, 5) *= 5e-1; */
+  Q(3, 3) *= 1e-2;
+  Q(4, 4) *= 1e-1;
+  Q(5, 5) *= 5e-1;
   /* Q.block<4, 4>(6, 6) *= 1e-1; */
   tra_model_t tra_model(tra_model_f);
   obs_model_t obs_model(obs_model_f);
 
   UKF ukf(1e-3, 1, 2, Q, tra_model, obs_model);
 
-  const Vec3 pt0(0.0, 0.0, 0.0);
-  const Vec3 vel(1.0, 0.0, 0.0);
-  const double R_std = 1e-3;
+  Vec3 pt(0.0, 0.0, 3.0);
+  double speed = 1.0;
+  double yaw = 0.0;
+  double curv = 0.18181818;
+  const double R_std = 1e0;
   R_t R = R_std*R_t::Identity();
   const x_t x0((x_t() << 
       0,
       0,
       0,
-      /* 0.5, */
-      /* 0.5, */
-      0,
+      0.5,
+      0.5,
+      /* 0, */
       /* 1, */
       /* 0, */
       /* 0, */
-      0
+      1
       ).finished()
       );
   const P_t P0 = 1e2*Q;
   double err_acc = 0.0;
   const int err_states = std::min(cols, kf_n_states);
   statecov_t sc {x0, P0};
-  for (int it = 0; it < n_pts; it++)
+  for (int it = 0; it < 50; it++)
   {
     std::cout << "iteration " << it << std::endl;
-    const Vec3 cur_pt = pt0 + it*vel;
+    pt = pt + speed*Vec3(cos(yaw), sin(yaw), 0.0) + curv*speed*speed*Vec3(cos(yaw+M_PI), sin(yaw+M_PI), 0.0);
+    yaw = normalize_angle(yaw + curv);
     const Eigen::VectorXd cur_gt(
         (Eigen::VectorXd(err_states) <<
-        cur_pt(0),
-        cur_pt(1),
-        cur_pt(2),
-        atan2(vel(1), vel(2)),
-        vel.norm()
-        /* 0 */
+        pt(0),
+        pt(1),
+        pt(2),
+        yaw,
+        speed,
+        curv
         ).finished()
         );
     /* const auto cur_gt = pts.block(it, 0, 1, err_states).transpose(); */
     /* const auto cur_pt = pts.block<1, 3>(it, 0).transpose(); */
-    if (it > 0)
-    {
-      const auto prev_pt = pts.block<1, 3>(it-1, 0).transpose();
-      std::cout << "Speed: " << (cur_pt-prev_pt).norm() << std::endl;
-    }
+    /* if (it > 0) */
+    /* { */
+    /*   const auto prev_pt = pts.block<1, 3>(it-1, 0).transpose(); */
+    /*   std::cout << "Speed: " << (cur_pt-prev_pt).norm() << std::endl; */
+    /* } */
     std::cout << "state ground-truth: " << std::endl << cur_gt.transpose() << std::endl;
+    std::cout << "ukf state: " << std::endl << sc.x.transpose() << std::endl;
     sc = ukf.predict(sc, u_t(), dt);
     sc.x = normalize_state(sc.x);
     std::cout << "state prediction: " << std::endl << sc.x.transpose() << std::endl;
-    sc = ukf.correct(sc, cur_pt, R);
+    sc = ukf.correct(sc, pt, R);
     sc.x = normalize_state(sc.x);
     const auto cur_est = sc.x.block(0, 0, err_states, 1);
     const double cur_err = (cur_gt-cur_est).norm();
