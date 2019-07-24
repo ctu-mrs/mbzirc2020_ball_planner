@@ -154,6 +154,29 @@ M load_csv(const std::string& path, const char delim = ',', bool skip_header = f
   return Eigen::Map<const Eigen::Matrix<typename M::Scalar, M::RowsAtCompileTime, M::ColsAtCompileTime, Eigen::RowMajor>>(values.data(), rows, values.size()/rows);
 }
 
+template<typename M>
+void save_csv(const M& mat, const std::string& path, const char delim = ',', const std::string header = std::string())
+{
+  std::ofstream odata(path);
+  if (!odata.is_open())
+  {
+    std::cerr << "Could not open " << path << std::endl;
+    return;
+  }
+  if (!header.empty())
+    odata << header << std::endl;
+  for (int row = 0; row < mat.rows(); row++)
+  {
+    for (int col = 0; col < mat.cols(); col++)
+    {
+      odata << mat(row, col);
+      if (col != mat.cols() -1)
+        odata << delim;
+    }
+    odata << std::endl;
+  }
+}
+
 int main()
 {
   std::string fname = "data.csv";
@@ -195,6 +218,7 @@ int main()
   double err_acc = 0.0;
   const int err_states = std::min(cols, kf_n_states);
   statecov_t sc {x0, P0};
+  Eigen::MatrixXd est_states(n_pts, kf_n_states);
   for (int it = 0; it < n_pts; it++)
   {
     std::cout << "iteration " << it << std::endl;
@@ -212,9 +236,12 @@ int main()
     const double cur_err = (cur_gt-cur_est).norm();
     err_acc += cur_err;
     std::cout << "state correction: " << std::endl << sc.x.transpose() << std::endl;
+    est_states.block<1, kf_n_states>(it, 0) = sc.x.transpose();
 
     /* std::cout << "state covariance: " << std::endl << sc.P << std::endl; */
     std::cout << "current error: " << std::endl << cur_err << std::endl;
     std::cout << "accumulated error: " << std::endl << err_acc << std::endl;
   }
+
+  save_csv(est_states, "est.csv", ',', "x,y,z,yaw,speed,curvature,qw,qx,qy,qz");
 }
