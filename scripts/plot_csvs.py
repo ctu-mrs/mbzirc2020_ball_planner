@@ -131,16 +131,18 @@ def main():
 
     samples3D = gts[:, :3]
     ests3D = ests[:, :3]
-    # ests3D = np.zeros((ests.shape[0], 3))
-    # it = 0
-    # for est in ests:
-    #     pos = est[0, :3]
-    #     quat = est[0, -4:]
-    #     [r, p, y] = quaternion_to_rpy(quat[0, 0], quat[0, 1], quat[0, 2], quat[0, 3])
-    #     R = rpy_to_R(r, p, y)
-    #     pos = (R*pos.transpose()).transpose()
-    #     ests3D[it, :] = pos
-    #     it += 1
+    
+    tangs = np.zeros((ests.shape[0], 3))
+    it = 0
+    for est in ests:
+        yaw = est[0, 3]
+        quat = est[0, -4:]
+        [r, p, y] = quaternion_to_rpy(quat[0, 0], quat[0, 1], quat[0, 2], quat[0, 3])
+        R = rpy_to_R(r, p, y)
+        unit_vec = np.array([[np.cos(yaw)],[np.sin(yaw)],[0]])
+        tan = (R*unit_vec).transpose()
+        tangs[it, :] = tan
+        it += 1
     
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -153,6 +155,13 @@ def main():
     ys = np.array(ests3D[:, 1].transpose().flatten()).flatten()
     zs = np.array(ests3D[:, 2].transpose().flatten()).flatten()
     ax.plot(xs, ys, zs)
+
+    for it in range(0, len(tangs)):
+        pt = ests3D[it, :]
+        tan = tangs[it, :]
+        pt2 = pt + tan
+        ax.plot([pt[0,0], pt2[0,0]], [pt[0,1], pt2[0,1]], [pt[0,2], pt2[0,2]], 'r')
+
     ax.set_aspect('equal')
     plt.show()
 

@@ -123,6 +123,7 @@ namespace balloon_planner
 
 using namespace balloon_planner;
 
+/* load_csv() function //{ */
 // from https://stackoverflow.com/questions/34247057/how-to-read-csv-file-and-assign-to-eigen-matrix
 template<typename M>
 M load_csv(const std::string& path, const char delim = ',', bool skip_header = false)
@@ -153,7 +154,9 @@ M load_csv(const std::string& path, const char delim = ',', bool skip_header = f
   }
   return Eigen::Map<const Eigen::Matrix<typename M::Scalar, M::RowsAtCompileTime, M::ColsAtCompileTime, Eigen::RowMajor>>(values.data(), rows, values.size()/rows);
 }
+//}
 
+/* save_csv() function //{ */
 template<typename M>
 void save_csv(const M& mat, const std::string& path, const char delim = ',', const std::string header = std::string())
 {
@@ -176,6 +179,7 @@ void save_csv(const M& mat, const std::string& path, const char delim = ',', con
     odata << std::endl;
   }
 }
+//}
 
 int main()
 {
