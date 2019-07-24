@@ -181,10 +181,6 @@ int main()
 
   UKF ukf(1e-3, 1, 2, Q, tra_model, obs_model);
 
-  Vec3 pt(0.0, 0.0, 3.0);
-  double speed = 1.0;
-  double yaw = 0.0;
-  double curv = 0.18181818;
   const double R_std = 1e0;
   R_t R = R_std*R_t::Identity();
   const x_t x0((x_t() << 
@@ -204,39 +200,24 @@ int main()
   double err_acc = 0.0;
   const int err_states = std::min(cols, kf_n_states);
   statecov_t sc {x0, P0};
-  for (int it = 0; it < 50; it++)
+  for (int it = 0; it < n_pts; it++)
   {
     std::cout << "iteration " << it << std::endl;
-    pt = pt + speed*Vec3(cos(yaw), sin(yaw), 0.0) + curv*speed*speed*Vec3(cos(yaw+M_PI), sin(yaw+M_PI), 0.0);
-    yaw = normalize_angle(yaw + curv);
-    const Eigen::VectorXd cur_gt(
-        (Eigen::VectorXd(err_states) <<
-        pt(0),
-        pt(1),
-        pt(2),
-        yaw,
-        speed,
-        curv
-        ).finished()
-        );
-    /* const auto cur_gt = pts.block(it, 0, 1, err_states).transpose(); */
-    /* const auto cur_pt = pts.block<1, 3>(it, 0).transpose(); */
-    /* if (it > 0) */
-    /* { */
-    /*   const auto prev_pt = pts.block<1, 3>(it-1, 0).transpose(); */
-    /*   std::cout << "Speed: " << (cur_pt-prev_pt).norm() << std::endl; */
-    /* } */
+    const auto cur_gt = pts.block(it, 0, 1, err_states).transpose();
+    const auto cur_pt = pts.block<1, 3>(it, 0).transpose();
     std::cout << "state ground-truth: " << std::endl << cur_gt.transpose() << std::endl;
+
     std::cout << "ukf state: " << std::endl << sc.x.transpose() << std::endl;
     sc = ukf.predict(sc, u_t(), dt);
     sc.x = normalize_state(sc.x);
     std::cout << "state prediction: " << std::endl << sc.x.transpose() << std::endl;
-    sc = ukf.correct(sc, pt, R);
+    sc = ukf.correct(sc, cur_pt, R);
     sc.x = normalize_state(sc.x);
     const auto cur_est = sc.x.block(0, 0, err_states, 1);
     const double cur_err = (cur_gt-cur_est).norm();
     err_acc += cur_err;
     std::cout << "state correction: " << std::endl << sc.x.transpose() << std::endl;
+
     /* std::cout << "state covariance: " << std::endl << sc.P << std::endl; */
     std::cout << "current error: " << std::endl << cur_err << std::endl;
     std::cout << "accumulated error: " << std::endl << err_acc << std::endl;

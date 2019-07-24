@@ -157,7 +157,7 @@ def main():
         if sector == 0:
             cur_sample = sample_arc(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
             cur_yaw = sample_arc_tangent(l_arc_orig, radius, l_arc_start_ang, cur_sector_dist)
-            cur_curvature = -1.0/radius
+            cur_curvature = 1.0/radius
         elif sector == 1:
             cur_sample = sample_line(l_line_start, l_line_end, cur_sector_dist)
             cur_yaw = sample_line_tangent(l_line_start, l_line_end, cur_sector_dist)
@@ -165,7 +165,7 @@ def main():
         elif sector == 2:
             cur_sample = sample_arc(r_arc_orig, radius, r_arc_start_ang, cur_sector_dist, -1)
             cur_yaw = sample_arc_tangent(r_arc_orig, radius, r_arc_start_ang, cur_sector_dist)
-            cur_curvature = 1.0/radius
+            cur_curvature = -1.0/radius
         elif sector == 3:
             cur_sample = sample_line(r_line_start, r_line_end, cur_sector_dist)
             cur_yaw = sample_line_tangent(r_line_start, r_line_end, cur_sector_dist)
