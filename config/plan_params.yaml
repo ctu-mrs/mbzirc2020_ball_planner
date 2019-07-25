@@ -1,6 +1,5 @@
 planning_period: 0.01 # seconds
 world_frame: "local_origin_stable"
-min_balloon_height: 0.5 # meters
 gating_distance: 4.0 # meters
 max_time_since_update: 2.0 # seconds
 min_updates_to_confirm: 10
@@ -17,3 +16,7 @@ init_std:
   speed: 1.0
   curvature: 1.0
   quaternion: 1.0
+
+z_bounds: # measurements outside these bounds will be ignored
+  min: 5  # metres
+  max: 10 # metres

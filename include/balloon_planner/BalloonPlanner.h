@@ -86,10 +86,11 @@ namespace balloon_planner
       /* Parameters, loaded from ROS //{ */
       std::string m_world_frame;
       std::string m_uav_frame_id;
-      double m_min_balloon_height;
       double m_gating_distance;
       double m_max_time_since_update;
       double m_min_updates_to_confirm;
+      double m_z_bounds_min;
+      double m_z_bounds_max;
 
       UKF::x_t m_process_std;
       UKF::x_t m_init_std;
