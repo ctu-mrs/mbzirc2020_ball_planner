@@ -289,11 +289,22 @@ namespace balloon_planner
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
-    m_z_bounds_min = cfg.z_bounds_min;
-    m_z_bounds_max = cfg.z_bounds_max;
+    m_z_bounds_min = cfg.z_bounds__min;
+    m_z_bounds_max = cfg.z_bounds__max;
     m_gating_distance = cfg.gating_distance;
     m_max_time_since_update = cfg.max_time_since_update;
     m_min_updates_to_confirm = cfg.min_updates_to_confirm;
+
+    m_process_std(x_x) = m_process_std(x_y) = m_process_std(x_y) = cfg.process_std__position;
+    m_process_std(x_yaw) = cfg.process_std__yaw;
+    m_process_std(x_s) = cfg.process_std__speed;
+    m_process_std(x_c) = cfg.process_std__curvature;
+    m_process_std(x_qw) = m_process_std(x_qx) = m_process_std(x_qy) = m_process_std(x_qz) = cfg.process_std__quaternion;
+
+    m_init_std(x_yaw) = cfg.init_std__yaw;
+    m_init_std(x_s) = cfg.init_std__speed;
+    m_init_std(x_c) = cfg.init_std__curvature;
+    m_init_std(x_qw) = m_init_std(x_qx) = m_init_std(x_qy) = m_init_std(x_qz) = cfg.init_std__quaternion;
   }
   //}
 
@@ -311,11 +322,6 @@ void BalloonPlanner::onInit()
   // LOAD DYNAMIC PARAMETERS
   ROS_INFO("[%s]: LOADING DYNAMIC PARAMETERS", m_node_name.c_str());
   m_drmgr_ptr = std::make_unique<drmgr_t>(nh, m_node_name);
-  if (!m_drmgr_ptr->loaded_successfully())
-  {
-    ROS_ERROR("Some dynamic parameter default values were not loaded successfully, ending the node");
-    ros::shutdown();
-  }
 
   ROS_INFO("[%s]: LOADING STATIC PARAMETERS", m_node_name.c_str());
   mrs_lib::ParamLoader pl(nh, m_node_name);
@@ -329,41 +335,33 @@ void BalloonPlanner::onInit()
   m_drmgr_ptr->load_param("z_bounds/min", m_z_bounds_min);
   m_drmgr_ptr->load_param("z_bounds/max", m_z_bounds_max);
 
-  /* load process noise standard deviations //{ */
-  
-  {
-    const double process_std_pos = pl.load_param2<double>("process_std/position");
-    const double process_std_yaw = pl.load_param2<double>("process_std/yaw");
-    const double process_std_speed = pl.load_param2<double>("process_std/speed");
-    const double process_std_curvature = pl.load_param2<double>("process_std/curvature");
-    const double process_std_quaternion = pl.load_param2<double>("process_std/quaternion");
-    m_process_std(x_x) = m_process_std(x_y) = m_process_std(x_y) = process_std_pos;
-    m_process_std(x_yaw) = process_std_yaw;
-    m_process_std(x_s) = process_std_speed;
-    m_process_std(x_c) = process_std_curvature;
-    m_process_std(x_qw) = m_process_std(x_qx) = m_process_std(x_qy) = m_process_std(x_qz) = process_std_quaternion;
-  }
-  
+  /* load process noise standard deviations default values //{ */
+  m_drmgr_ptr->load_param2<double>("process_std/position");
+  m_drmgr_ptr->load_param2<double>("process_std/yaw");
+  m_drmgr_ptr->load_param2<double>("process_std/speed");
+  m_drmgr_ptr->load_param2<double>("process_std/curvature");
+  m_drmgr_ptr->load_param2<double>("process_std/quaternion");
   //}
 
   /* load initialization noise standard deviations //{ */
-  
-  {
-    const double init_std_yaw = pl.load_param2<double>("init_std/yaw");
-    const double init_std_speed = pl.load_param2<double>("init_std/speed");
-    const double init_std_curvature = pl.load_param2<double>("init_std/curvature");
-    const double init_std_quaternion = pl.load_param2<double>("init_std/quaternion");
-    m_init_std(x_yaw) = init_std_yaw;
-    m_init_std(x_s) = init_std_speed;
-    m_init_std(x_c) = init_std_curvature;
-    m_init_std(x_qw) = m_init_std(x_qx) = m_init_std(x_qy) = m_init_std(x_qz) = init_std_quaternion;
-  }
-  
+  m_drmgr_ptr->load_param2<double>("init_std/yaw");
+  m_drmgr_ptr->load_param2<double>("init_std/speed");
+  m_drmgr_ptr->load_param2<double>("init_std/curvature");
+  m_drmgr_ptr->load_param2<double>("init_std/quaternion");
   //}
 
   if (!pl.loaded_successfully())
   {
     ROS_ERROR("Some compulsory parameters were not loaded successfully, ending the node");
+    ros::shutdown();
+  }
+
+  if (!m_drmgr_ptr->loaded_successfully())
+  {
+    ROS_ERROR("Some dynamic parameter default values were not loaded successfully, ending the node");
+    const auto to_init = m_drmgr_ptr->to_init();
+    for (const auto& name : to_init)
+      ROS_ERROR("missing parameter '%s'", name.c_str());
     ros::shutdown();
   }
 
