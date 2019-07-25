@@ -71,7 +71,7 @@ namespace balloon_planner
     {
       ROS_INFO("[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - m_current_estimate_last_update).toSec();
-      const UKF::Q_t Q = dt*m_process_noise_std*UKF::Q_t::Identity();
+      const UKF::Q_t Q = dt*m_process_std.asDiagonal();
       m_current_estimate = m_ukf.predict(m_current_estimate, UKF::u_t(), Q, dt);
       m_current_estimate = m_ukf.correct(m_current_estimate, closest_meas.pos, closest_meas.cov);
       m_current_estimate_last_update = stamp;
@@ -95,11 +95,8 @@ namespace balloon_planner
       ROS_INFO("[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       m_current_estimate.x = UKF::x_t::Zero();
       m_current_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
-      m_current_estimate.P = UKF::P_t::Identity();
+      m_current_estimate.P = m_init_std.asDiagonal();
       m_current_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
-      m_current_estimate.P.block<1, 1>(3, 3) = m_init_std_yaw;
-      m_current_estimate.P.block<1, 1>(4, 4) = m_init_std_speed;
-      m_current_estimate.P.block<1, 1>(5, 5) = m_init_std_curvature;
       m_current_estimate_exists = true;
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates = 1;
@@ -112,11 +109,14 @@ namespace balloon_planner
   }
   //}
 
+  /* get_pos() method //{ */
   pos_t BalloonPlanner::get_pos(const UKF::x_t& x)
   {
     return x.block<3, 1>(0, 0);
   }
+  //}
 
+  /* get_pos_cov() method //{ */
   pos_cov_t BalloonPlanner::get_pos_cov(const UKF::statecov_t& statecov)
   {
     pos_cov_t ret;
@@ -124,6 +124,7 @@ namespace balloon_planner
     ret.cov = statecov.P.block<3, 3>(0, 0);
     return ret;
   }
+  //}
 
   /* to_output_message() method //{ */
   geometry_msgs::PoseWithCovarianceStamped BalloonPlanner::to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header)
@@ -289,7 +290,6 @@ namespace balloon_planner
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
     m_min_balloon_height = cfg.min_balloon_height;
-    m_filter_coeff = cfg.filter_coeff;
     m_gating_distance = cfg.gating_distance;
     m_max_time_since_update = cfg.max_time_since_update;
     m_min_updates_to_confirm = cfg.min_updates_to_confirm;
@@ -313,26 +313,34 @@ void BalloonPlanner::onInit()
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
   pl.load_param("min_balloon_height", m_min_balloon_height);
-  pl.load_param("filter_coeff", m_filter_coeff);
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
 
   /* load process noise standard deviations //{ */
   
-  /* pl.load_param("process_noise_std", m_process_noise_std); */
+  {
+    const double process_std_pos = pl.load_param2<double>("process_std/position");
+    const double process_std_yaw = pl.load_param2<double>("process_std/yaw");
+    const double process_std_speed = pl.load_param2<double>("process_std/speed");
+    const double process_std_curvature = pl.load_param2<double>("process_std/curvature");
+    const double process_std_quaternion = pl.load_param2<double>("process_std/quaternion");
+    m_process_std(x_x) = m_process_std(x_y) = m_process_std(x_y) = process_std_pos;
+    m_process_std(x_yaw) = process_std_yaw;
+    m_process_std(x_s) = process_std_speed;
+    m_process_std(x_c) = process_std_curvature;
+    m_process_std(x_qw) = m_process_std(x_qx) = m_process_std(x_qy) = m_process_std(x_qz) = process_std_quaternion;
+  }
   
   //}
 
   /* load initialization noise standard deviations //{ */
   
   {
-    const double init_std_pos = pl.load_param2<double>("init_std/pos");
     const double init_std_yaw = pl.load_param2<double>("init_std/yaw");
     const double init_std_speed = pl.load_param2<double>("init_std/speed");
     const double init_std_curvature = pl.load_param2<double>("init_std/curvature");
     const double init_std_quaternion = pl.load_param2<double>("init_std/quaternion");
-    m_init_std(x_x) = m_init_std(x_y) = m_init_std(x_y) = init_std_pos;
     m_init_std(x_yaw) = init_std_yaw;
     m_init_std(x_s) = init_std_speed;
     m_init_std(x_c) = init_std_curvature;

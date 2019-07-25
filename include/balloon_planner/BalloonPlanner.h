@@ -87,7 +87,6 @@ namespace balloon_planner
       std::string m_world_frame;
       std::string m_uav_frame_id;
       double m_min_balloon_height;
-      double m_filter_coeff;
       double m_gating_distance;
       double m_max_time_since_update;
       double m_min_updates_to_confirm;
