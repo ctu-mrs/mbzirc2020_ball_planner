@@ -291,7 +291,7 @@ void BalloonPlanner::onInit()
   /* load parameters //{ */
 
   // LOAD DYNAMIC PARAMETERS
-  ROS_INFO("[%s]: LOADING DYNEMIC PARAMETERS", m_node_name.c_str());
+  ROS_INFO("[%s]: LOADING DYNAMIC PARAMETERS", m_node_name.c_str());
   m_drmgr_ptr = std::make_unique<drmgr_t>(nh, m_node_name);
   if (!m_drmgr_ptr->loaded_successfully())
   {
@@ -309,19 +309,14 @@ void BalloonPlanner::onInit()
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
   pl.load_param("process_noise_std", m_process_noise_std);
-  pl.load_param("z_bounds/min", m_z_bounds_min);
-  pl.load_param("z_bounds/max", m_z_bounds_max);
+  m_drmgr_ptr->load_param("z_bounds/min", m_z_bounds_min);
+  m_drmgr_ptr->load_param("z_bounds/max", m_z_bounds_max);
 
   if (!pl.loaded_successfully())
   {
     ROS_ERROR("Some compulsory parameters were not loaded successfully, ending the node");
     ros::shutdown();
   }
-
-  auto drcfg = m_drmgr_ptr->config;
-  drcfg.z_bounds_min = m_z_bounds_min;
-  drcfg.z_bounds_max = m_z_bounds_max;
-  m_drmgr_ptr->update_config(drcfg);
 
   //}
 
