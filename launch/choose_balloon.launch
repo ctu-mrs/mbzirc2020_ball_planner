@@ -16,13 +16,13 @@
 
       <param name="uav_name" type="string" value="$(arg uav_name)" />
       <param name="uav_frame_id" type="string" value="fcu_$(arg uav_name)" />
-      <rosparam file="$(find balloon_planner)/config/sim_plan_params.yaml" command="load" />
+      <rosparam file="$(find balloon_planner)/config/plan_params.yaml" command="load" />
 
       <!-- Subscribers -->
-      <remap from="~balloon_detections" to="object_detect/detected_objects_" />
+      <remap from="~balloon_detections" to="object_detect/detected_objects" />
 
       <!-- Publishers -->
-      <remap from="~balloon_chosen_out" to="~balloon_chosen_out_" />
+      <remap from="~balloon_chosen_out" to="~balloon_chosen_out" />
 
     </node>
 

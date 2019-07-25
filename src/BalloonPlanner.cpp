@@ -273,7 +273,6 @@ namespace balloon_planner
   {
     m_z_bounds_min = cfg.z_bounds_min;
     m_z_bounds_max = cfg.z_bounds_max;
-    m_filter_coeff = cfg.filter_coeff;
     m_gating_distance = cfg.gating_distance;
     m_max_time_since_update = cfg.max_time_since_update;
     m_min_updates_to_confirm = cfg.min_updates_to_confirm;
@@ -291,18 +290,27 @@ void BalloonPlanner::onInit()
 
   /* load parameters //{ */
 
+  // LOAD DYNAMIC PARAMETERS
+  ROS_INFO("[%s]: LOADING DYNEMIC PARAMETERS", m_node_name.c_str());
+  m_drmgr_ptr = std::make_unique<drmgr_t>(nh, m_node_name);
+  if (!m_drmgr_ptr->loaded_successfully())
+  {
+    ROS_ERROR("Some dynamic parameter default values were not loaded successfully, ending the node");
+    ros::shutdown();
+  }
+
+  ROS_INFO("[%s]: LOADING STATIC PARAMETERS", m_node_name.c_str());
   mrs_lib::ParamLoader pl(nh, m_node_name);
 
   double planning_period = pl.load_param2<double>("planning_period");
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
-  pl.load_param("filter_coeff", m_filter_coeff);
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
   pl.load_param("process_noise_std", m_process_noise_std);
-  pl.load_param("z_bounds_min", m_z_bounds_min);
-  pl.load_param("z_bounds_max", m_z_bounds_max);
+  pl.load_param("z_bounds/min", m_z_bounds_min);
+  pl.load_param("z_bounds/max", m_z_bounds_max);
 
   if (!pl.loaded_successfully())
   {
@@ -310,13 +318,10 @@ void BalloonPlanner::onInit()
     ros::shutdown();
   }
 
-  // LOAD DYNAMIC PARAMETERS
-  m_drmgr_ptr = std::make_unique<drmgr_t>(nh, m_node_name);
-  if (!m_drmgr_ptr->loaded_successfully())
-  {
-    ROS_ERROR("Some dynamic parameter default values were not loaded successfully, ending the node");
-    ros::shutdown();
-  }
+  auto drcfg = m_drmgr_ptr->config;
+  drcfg.z_bounds_min = m_z_bounds_min;
+  drcfg.z_bounds_max = m_z_bounds_max;
+  m_drmgr_ptr->update_config(drcfg);
 
   //}
 
