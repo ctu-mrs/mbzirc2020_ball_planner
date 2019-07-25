@@ -54,7 +54,8 @@ namespace balloon_planner
       std_msgs::Header header;
       header.frame_id = m_world_frame;
       header.stamp = m_current_estimate_last_update;
-      m_pub_chosen_balloon.publish(to_output_message({m_current_estimate.x, m_current_estimate.P}, header));
+      const auto cur_pos_cov = get_pos_cov(m_current_estimate);
+      m_pub_chosen_balloon.publish(to_output_message(cur_pos_cov, header));
       ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
     }
   }
@@ -64,17 +65,15 @@ namespace balloon_planner
   bool BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas)
   {
     pos_cov_t closest_meas;
-    bool meas_valid = find_closest_to(measurements, m_current_estimate.x, closest_meas, true);
+    const auto cur_pos = get_pos(m_current_estimate.x);
+    bool meas_valid = find_closest_to(measurements, cur_pos, closest_meas, true);
     if (meas_valid)
     {
       ROS_INFO("[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - m_current_estimate_last_update).toSec();
-      m_current_estimate.Q = dt*m_process_noise_std*UKF::Q_t::Identity();
-      m_current_estimate.prediction_step();
-      m_current_estimate.z = closest_meas.pos;
-      m_current_estimate.R = closest_meas.cov;
-      m_current_estimate.correction_step();
-      /* m_current_estimate = m_filter_coeff*m_current_estimate + (1.0 - m_filter_coeff)*closest_balloon; */
+      const UKF::Q_t Q = dt*m_process_noise_std*UKF::Q_t::Identity();
+      m_current_estimate = m_ukf.predict(m_current_estimate, UKF::u_t(), Q, dt);
+      m_current_estimate = m_ukf.correct(m_current_estimate, closest_meas.pos, closest_meas.cov);
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates++;
       used_meas = closest_meas;
@@ -94,8 +93,13 @@ namespace balloon_planner
     if (meas_valid)
     {
       ROS_INFO("[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
-      m_current_estimate.x = closest_meas.pos;
-      m_current_estimate.P = closest_meas.cov;
+      m_current_estimate.x = UKF::x_t::Zero();
+      m_current_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
+      m_current_estimate.P = UKF::P_t::Identity();
+      m_current_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
+      m_current_estimate.P.block<1, 1>(3, 3) = m_init_std_yaw;
+      m_current_estimate.P.block<1, 1>(4, 4) = m_init_std_speed;
+      m_current_estimate.P.block<1, 1>(5, 5) = m_init_std_curvature;
       m_current_estimate_exists = true;
       m_current_estimate_last_update = stamp;
       m_current_estimate_n_updates = 1;
@@ -107,6 +111,19 @@ namespace balloon_planner
     return meas_valid;
   }
   //}
+
+  pos_t BalloonPlanner::get_pos(const UKF::x_t& x)
+  {
+    return x.block<3, 1>(0, 0);
+  }
+
+  pos_cov_t BalloonPlanner::get_pos_cov(const UKF::statecov_t& statecov)
+  {
+    pos_cov_t ret;
+    ret.pos = get_pos(statecov.x);
+    ret.cov = statecov.P.block<3, 3>(0, 0);
+    return ret;
+  }
 
   /* to_output_message() method //{ */
   geometry_msgs::PoseWithCovarianceStamped BalloonPlanner::to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header)
@@ -300,7 +317,29 @@ void BalloonPlanner::onInit()
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
-  pl.load_param("process_noise_std", m_process_noise_std);
+
+  /* load process noise standard deviations //{ */
+  
+  /* pl.load_param("process_noise_std", m_process_noise_std); */
+  
+  //}
+
+  /* load initialization noise standard deviations //{ */
+  
+  {
+    const double init_std_pos = pl.load_param2<double>("init_std/pos");
+    const double init_std_yaw = pl.load_param2<double>("init_std/yaw");
+    const double init_std_speed = pl.load_param2<double>("init_std/speed");
+    const double init_std_curvature = pl.load_param2<double>("init_std/curvature");
+    const double init_std_quaternion = pl.load_param2<double>("init_std/quaternion");
+    m_init_std(x_x) = m_init_std(x_y) = m_init_std(x_y) = init_std_pos;
+    m_init_std(x_yaw) = init_std_yaw;
+    m_init_std(x_s) = init_std_speed;
+    m_init_std(x_c) = init_std_curvature;
+    m_init_std(x_qw) = m_init_std(x_qx) = m_init_std(x_qy) = m_init_std(x_qz) = init_std_quaternion;
+  }
+  
+  //}
 
   if (!pl.loaded_successfully())
   {
@@ -350,7 +389,7 @@ void BalloonPlanner::onInit()
   {
     UKF::transition_model_t tra_model(tra_model_f);
     UKF::observation_model_t obs_model(obs_model_f);
-    ukf = UKF(const double alpha, const double kappa, const double beta, const Q_t& Q, tra_model_f, obs_model_f);
+    m_ukf = UKF(tra_model_f, obs_model_f);
   }
   reset_current_estimate();
   m_is_initialized = true;

@@ -14,29 +14,6 @@ namespace balloon_planner
   using tra_model_t = UKF::transition_model_t;
   using obs_model_t = UKF::observation_model_t;
 
-  // indices of the state interpretations
-  enum
-  {
-    x_x = 0, // 3D x-coordinate of the ball position
-    x_y,     // 3D y-coordinate of the ball position
-    x_z,     // 3D z-coordinate of the ball position
-    x_yaw,   // yaw of the MAV in the eight-plane
-    x_s,     // the ball speed
-    x_c,     // curvature of the MAV trajectory in the eight-plane
-    x_qw,    // w element of quaterion, defining rotation from world frame to the eight-plane frame
-    x_qx,    // x element of quaterion, defining rotation from world frame to the eight-plane frame
-    x_qy,    // y element of quaterion, defining rotation from world frame to the eight-plane frame
-    x_qz,    // z element of quaterion, defining rotation from world frame to the eight-plane frame
-  };
-
-  // indices of the measurement interpretations
-  enum
-  {
-    z_x = 0, // 3D x-coordinate of the ball position
-    z_y,     // 3D y-coordinate of the ball position
-    z_z,     // 3D z-coordinate of the ball position
-  };
-
   using Quat = Eigen::Quaterniond;
   using Vec3 = Eigen::Vector3d;
   using Vec2 = Eigen::Vector2d;
