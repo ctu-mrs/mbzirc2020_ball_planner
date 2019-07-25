@@ -252,7 +252,7 @@ namespace balloon_planner
   /* point_valid() method //{ */
   bool BalloonPlanner::point_valid(const pos_t& pt)
   {
-    const bool height_valid = pt.z() > m_min_balloon_height;
+    const bool height_valid = pt.z() > m_z_bounds_min && pt.z() < m_z_bounds_max;
     const bool sane_values = !pt.array().isNaN().any() && !pt.array().isInf().any();
     return height_valid && sane_values;
   }
@@ -271,7 +271,8 @@ namespace balloon_planner
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
-    m_min_balloon_height = cfg.min_balloon_height;
+    m_z_bounds_min = cfg.z_bounds_min;
+    m_z_bounds_max = cfg.z_bounds_max;
     m_filter_coeff = cfg.filter_coeff;
     m_gating_distance = cfg.gating_distance;
     m_max_time_since_update = cfg.max_time_since_update;
@@ -295,12 +296,13 @@ void BalloonPlanner::onInit()
   double planning_period = pl.load_param2<double>("planning_period");
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
-  pl.load_param("min_balloon_height", m_min_balloon_height);
   pl.load_param("filter_coeff", m_filter_coeff);
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
   pl.load_param("process_noise_std", m_process_noise_std);
+  pl.load_param("z_bounds_min", m_z_bounds_min);
+  pl.load_param("z_bounds_max", m_z_bounds_max);
 
   if (!pl.loaded_successfully())
   {
