@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import rospy
+import sys
 import numpy as np
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -70,10 +72,11 @@ def ypr_to_quaternion(yaw, pitch, roll):
         qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
         return [qw, qx, qy, qz]
 
-def save_data(data, ofname, col_names):
+def save_data(data, ofname, col_names=None):
     with open(ofname, 'w') as of:
-        txt = ",".join(col_names)
-        of.write("{:s}\n".format(txt))
+        if col_names is not None:
+            txt = ",".join(col_names)
+            of.write("{:s}\n".format(txt))
         rows = data.shape[0]
         for it in range(0, rows):
             row = data[it, :]
@@ -81,17 +84,26 @@ def save_data(data, ofname, col_names):
             of.write("{:s}\n".format(txt))
 
 def main():
-    # parameters of the pattern
-    radius = 5.5 # metres
-    width = 25   # metres
-    lin_cutoff = 1.0 # metres, how much of the radius will be cut-off in favour of the linear segment
+    rospy.init_node("eight_generator")
 
-    # parameters of the sampling
-    sample_dist = 0.5 # metres
+    # parameters of the pattern
+    radius = rospy.get_param("~pattern/radius", 5.5)          # metres
+    width = rospy.get_param("~pattern/width", 25)             # metres
+    lin_cutoff = rospy.get_param("~pattern/lin_cutoff", 1)    # metres
 
     # parameters of transformation of the eight pattern
-    pattern_rotation_ypr = [1.0, 2.0, 3.0] # radians
-    pattern_translation  = [5.0, -3.0, 4.0] # metres
+    pattern_rotation_ypr = rospy.get_param("~pattern/rotation_ypr", [1.0, 2.0, 3.0])          # radians
+    pattern_translation = rospy.get_param("~pattern/translation", [5.0, -3.0, 4.0])           # metres
+
+    # parameters of the sampling
+    sample_spd = rospy.get_param("~sampling/speed", 0.5) # metres per second
+    sample_dt = rospy.get_param("~sampling/dt", 0.2)     # seconds
+    sample_dist = sample_spd*sample_dt # metres
+
+    plot_traj = rospy.get_param("~plot_result", False)
+    save_header = rospy.get_param("~save_header", False)
+
+    output_filename = rospy.get_param("~output_file", "out.csv")
 
     ### ARCS
     # half of the angle of the circle sector, which is cut off by the linear segments
@@ -182,23 +194,29 @@ def main():
     samples3D += trans
     samples3D = np.array(samples3D.transpose())
 
-    speeds = sample_dist*np.ones((n_pts, 1)) # assuming dt = 1s
+    speeds = sample_dist*np.ones((n_pts, 1))/sample_dt # assuming dt = 1s
 
-    data = np.hstack([samples3D, yaws, speeds, curvatures])
-    save_data(data, "data.csv", ["x", "y", "z", "yaw", "s", "c"])
+    # data = np.hstack([samples3D, yaws, speeds, curvatures])
+    yaws[:] = 0.0
+    data = np.hstack([samples3D, yaws])
+    col_names = ["x", "y", "z", "yaw", "s", "c"]
+    if not save_header:
+        col_names = None
+    save_data(data, output_filename, col_names)
 
     quat = ypr_to_quaternion(pattern_rotation_ypr[0], pattern_rotation_ypr[1], pattern_rotation_ypr[2])
     print("Corresponding quaternion: [{:f}, {:f}, {:f}, {:f}]".format(quat[0], quat[1], quat[2], quat[3]))
 
-    speed_check = np.linalg.norm(samples3D[1:, :] - samples3D[0:-1, :], axis=1)
+    speed_check = np.linalg.norm(samples3D[1:, :] - samples3D[0:-1, :], axis=1)/sample_dt
     print(speed_check)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten())
-    ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten(), 'x')
-    # ax.axis('equal')
-    ax.set_aspect('equal')
-    plt.show()
+    if plot_traj:
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten())
+        ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten(), 'x')
+        # ax.axis('equal')
+        ax.set_aspect('equal')
+        plt.show()
 
     # for it in range(0, len(samples)):
     #     plt.plot(samples[:it, 0], samples[:it, 1], 'x')
@@ -206,6 +224,7 @@ def main():
     #     plt.xlim([-15, 15])
     #     plt.ylim([-10, 10])
     #     plt.show()
+    print("DONE")
 
 
 if __name__ == "__main__":

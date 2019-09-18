@@ -266,7 +266,6 @@ namespace balloon_planner
   }
   //}
 
-
   /* point_valid() method //{ */
   bool BalloonPlanner::point_valid(const pos_t& pt)
   {
