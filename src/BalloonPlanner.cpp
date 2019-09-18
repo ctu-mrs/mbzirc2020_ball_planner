@@ -332,23 +332,6 @@ void BalloonPlanner::onInit()
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
-  m_drmgr_ptr->load_param("z_bounds/min", m_z_bounds_min);
-  m_drmgr_ptr->load_param("z_bounds/max", m_z_bounds_max);
-
-  /* load process noise standard deviations default values //{ */
-  m_drmgr_ptr->load_param2<double>("process_std/position");
-  m_drmgr_ptr->load_param2<double>("process_std/yaw");
-  m_drmgr_ptr->load_param2<double>("process_std/speed");
-  m_drmgr_ptr->load_param2<double>("process_std/curvature");
-  m_drmgr_ptr->load_param2<double>("process_std/quaternion");
-  //}
-
-  /* load initialization noise standard deviations //{ */
-  m_drmgr_ptr->load_param2<double>("init_std/yaw");
-  m_drmgr_ptr->load_param2<double>("init_std/speed");
-  m_drmgr_ptr->load_param2<double>("init_std/curvature");
-  m_drmgr_ptr->load_param2<double>("init_std/quaternion");
-  //}
 
   if (!pl.loaded_successfully())
   {
@@ -359,9 +342,6 @@ void BalloonPlanner::onInit()
   if (!m_drmgr_ptr->loaded_successfully())
   {
     ROS_ERROR("Some dynamic parameter default values were not loaded successfully, ending the node");
-    const auto to_init = m_drmgr_ptr->to_init();
-    for (const auto& name : to_init)
-      ROS_ERROR("missing parameter '%s'", name.c_str());
     ros::shutdown();
   }
 
@@ -372,13 +352,7 @@ void BalloonPlanner::onInit()
   m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
   mrs_lib::SubscribeMgr smgr(nh);
   constexpr bool time_consistent = true;
-  m_sh_balloons = smgr.create_handler_threadsafe<detections_t, time_consistent>("balloon_detections", 10, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-
-  if (!smgr.loaded_successfully())
-  {
-    ROS_ERROR("Unable to subscribe to some topics, ending the node");
-    ros::shutdown();
-  }
+  m_sh_balloons = smgr.create_handler<detections_t, time_consistent>("balloon_detections", ros::Duration(5.0));
 
   m_reset_chosen_server = nh.advertiseService("reset_chosen", &BalloonPlanner::reset_chosen_callback, this);
   //}
