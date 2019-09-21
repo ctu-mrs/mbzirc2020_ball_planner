@@ -60,28 +60,39 @@ include_directories(
 ## Declare a C++ executable
 add_library(BalloonPlanner
   src/eight_ukf.cpp
+  src/eight_rheiv.cpp
   src/BalloonPlanner.cpp
   )
-
 add_dependencies(BalloonPlanner
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS})
-
 ## Specify libraries to link a library or executable target against
 target_link_libraries(BalloonPlanner
   ${catkin_LIBRARIES}
   )
 
-## Declare a C++ executable
-add_executable(eight_ukf
-  src/eight_ukf.cpp
-  )
+# ## Declare a C++ executable
+# add_executable(eight_ukf
+#   src/eight_ukf.cpp
+#   )
+# add_dependencies(eight_ukf
+#   ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#   ${catkin_EXPORTED_TARGETS})
+# ## Specify libraries to link a library or executable target against
+# target_link_libraries(eight_ukf
+#   ${catkin_LIBRARIES}
+#   )
+# target_compile_options(eight_ukf PRIVATE "-DCOMPILE_EIGHT_UKF_TEST")
 
-add_dependencies(eight_ukf
+## Declare a C++ executable
+add_executable(eight_rheiv
+  src/eight_rheiv.cpp
+  )
+add_dependencies(eight_rheiv
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS})
-
 ## Specify libraries to link a library or executable target against
-target_link_libraries(eight_ukf
+target_link_libraries(eight_rheiv
   ${catkin_LIBRARIES}
   )
+target_compile_options(eight_rheiv PRIVATE "-DCOMPILE_EIGHT_RHEIV_TEST")
