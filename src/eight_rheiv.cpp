@@ -8,12 +8,14 @@ namespace balloon_planner
   {
     using x_t = RHEIV::x_t;
     using xs_t = RHEIV::xs_t;
+    using u_t = RHEIV::u_t;
 
     using P_t = RHEIV::P_t;
     using Ps_t = RHEIV::Ps_t;
 
     using z_t = RHEIV::z_t;
     using zs_t = RHEIV::zs_t;
+    using theta_t = RHEIV::theta_t;
 
     using f_z_t = RHEIV::f_z_t;
     using dzdx_t = RHEIV::dzdx_t;
@@ -111,39 +113,90 @@ Eigen::Matrix<double, rows, 1> normal_randvec(const Eigen::Matrix<double, rows, 
 }
 //}
 
+double plane_diff(const theta_t& th1, const theta_t& th2)
+{
+  const auto th1n = th1.normalized();
+  const auto th2n = th2.normalized();
+  return std::min( (th1n-th2n).norm(), (th1n+th2n).norm() );
+}
+
 /* main() function for testing //{ */
 int main()
 {
   std::string fname = "/home/matous/balloon_workspace/src/ros_packages/balloon_planner/data.csv";
+  std::string plane_fname = "/home/matous/balloon_workspace/src/ros_packages/balloon_planner/plane.csv";
 
   const char delim = ',';
   const Eigen::MatrixXd pts = load_csv<Eigen::MatrixXd>(fname, delim, true);
   const int n_pts = pts.rows();
-  const int cols = pts.cols();
+  [[maybe_unused]] const int cols = pts.cols();
   assert(cols >= n_states);
   std::cout << "Loaded " << n_pts << " points" << std::endl;
+  const theta_t theta_gt = load_csv<Eigen::MatrixXd>(plane_fname, delim, true).transpose().normalized();
 
   const f_z_t f_z(f_z_f);
   const dzdx_t dzdx = dzdx_t::Identity();
 
-  RHEIV rheiv(f_z, dzdx);
+  RHEIV rheiv(f_z, dzdx, 1e-15, 1e4);
 
+  xs_t gts = pts.transpose().block(0, 0, n_states, n_pts);
   xs_t xs(n_states, n_pts);
   Ps_t Ps(n_pts);
   for (int it = 0; it < n_pts; it++)
   {
     const auto cur_pt = pts.block<1, n_states>(it, 0).transpose();
     const P_t tmp = P_t::Random();
-    const P_t P = tmp*tmp.transpose();
+    const P_t P = 5*tmp*tmp.transpose();
     const x_t cur_x = cur_pt + normal_randvec(P);
     xs.block(0, it, n_states, 1) = cur_x;
     Ps.at(it) = P;
   }
 
-  const auto theta = rheiv.fit(xs, Ps);
-  std::cout << "theta (norm: " << theta.norm() << "):" << std::endl << theta << std::endl;
+  const auto theta_AML = rheiv.fit(xs, Ps);
+  const auto theta_ALS = rheiv.fit_ALS(xs);
+  const auto theta_ALS_gt = rheiv.fit_ALS(gts);
 
-  save_csv(theta, "theta.csv", ',', "a,b,c,d");
+  double avg_err_AML = 0.0;
+  double avg_err_ALS = 0.0;
+  double avg_err_ALS_gt = 0.0;
+  double avg_err_gt = 0.0;
+  for (int it = 0; it < n_pts; it++)
+  {
+    const auto cur_pt = pts.block<1, n_states>(it, 0).transpose();
+    const u_t cur_u ( (u_t() << cur_pt, 1).finished() );
+    const double err_AML = abs(theta_AML.transpose() * cur_u);
+    const double err_ALS = abs(theta_ALS.transpose() * cur_u);
+    const double err_ALS_gt = abs(theta_ALS_gt.transpose() * cur_u);
+    const double err_gt = abs(theta_gt.transpose() * cur_u);
+    avg_err_AML += err_AML;
+    avg_err_ALS += err_ALS;
+    avg_err_ALS_gt += err_ALS_gt;
+    avg_err_gt += err_gt;
+  }
+  avg_err_AML /= n_pts;
+  avg_err_ALS /= n_pts;
+  avg_err_ALS_gt /= n_pts;
+  avg_err_gt /= n_pts;
+
+  std::cout << "theta (RHEIV):  " << std::endl << theta_AML << std::endl;
+  std::cout << "theta (ALS):    " << std::endl << theta_ALS << std::endl;
+  std::cout << "theta (ALS, gt):" << std::endl << theta_ALS_gt << std::endl;
+  std::cout << "theta (gt):     " << std::endl << theta_gt << std::endl;
+
+  std::cout << std::endl;
+
+  std::cout << "norm error (RHEIV):  " << plane_diff(theta_AML, theta_gt) << std::endl;
+  std::cout << "norm error (ALS):    " << plane_diff(theta_ALS, theta_gt) << std::endl;
+  std::cout << "norm error (ALS, gt):" << plane_diff(theta_ALS_gt, theta_gt) << std::endl;
+
+  std::cout << std::endl;
+
+  std::cout << "avg. error (RHEIV):  " << avg_err_AML << "m" << std::endl;
+  std::cout << "avg. error (ALS):    " << avg_err_ALS << "m" << std::endl;
+  std::cout << "avg. error (ALS, gt):" << avg_err_ALS_gt << "m" << std::endl;
+  std::cout << "avg. error (gt):     " << avg_err_gt << "m" << std::endl;
+
+  /* save_csv(theta, "theta.csv", ',', "a,b,c,d"); */
 }
 //}
 

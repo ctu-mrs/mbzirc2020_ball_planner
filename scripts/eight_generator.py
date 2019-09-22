@@ -79,7 +79,7 @@ def save_data(data, ofname, col_names=None):
             of.write("{:s}\n".format(txt))
         rows = data.shape[0]
         for it in range(0, rows):
-            row = data[it, :]
+            row = data[it, :].tolist()
             txt = ",".join(map(str, row))
             of.write("{:s}\n".format(txt))
 
@@ -100,10 +100,11 @@ def main():
     sample_dt = rospy.get_param("~sampling/dt", 0.2)     # seconds
     sample_dist = sample_spd*sample_dt # metres
 
-    plot_traj = rospy.get_param("~plot_result", False)
+    plot_traj = rospy.get_param("~plot_result", True)
     save_header = rospy.get_param("~save_header", False)
 
-    output_filename = rospy.get_param("~output_file", "out.csv")
+    output_filename = rospy.get_param("~output_file", "data.csv")
+    plane_output_filename = rospy.get_param("~plane_output_file", "plane.csv")
 
     ### ARCS
     # half of the angle of the circle sector, which is cut off by the linear segments
@@ -196,6 +197,17 @@ def main():
 
     speeds = sample_dist*np.ones((n_pts, 1))/sample_dt # assuming dt = 1s
 
+    # quat = ypr_to_quaternion(pattern_rotation_ypr[0], pattern_rotation_ypr[1], pattern_rotation_ypr[2])
+    # print("Corresponding quaternion: [{:f}, {:f}, {:f}, {:f}]".format(quat[0], quat[1], quat[2], quat[3]))
+    z_vec = np.matrix((0, 0, 1)).transpose()
+    plane_norm = np.dot(R, z_vec)
+    plane_d = -plane_norm.transpose()*trans
+    # plane_params = np.matrix(np.squeeze((plane_norm[0][0], plane_norm[1][0], plane_norm[2][0], plane_d)))
+    plane_params = np.array(np.hstack((plane_norm[0], plane_norm[1], plane_norm[2], plane_d)))
+    plane_norm = np.array(plane_norm)
+    trans = np.array(trans)
+    save_data(plane_params, plane_output_filename, ["a", "b", "c", "d"])
+
     # data = np.hstack([samples3D, yaws, speeds, curvatures])
     yaws[:] = 0.0
     data = np.hstack([samples3D, yaws])
@@ -204,14 +216,25 @@ def main():
         col_names = None
     save_data(data, output_filename, col_names)
 
-    quat = ypr_to_quaternion(pattern_rotation_ypr[0], pattern_rotation_ypr[1], pattern_rotation_ypr[2])
-    print("Corresponding quaternion: [{:f}, {:f}, {:f}, {:f}]".format(quat[0], quat[1], quat[2], quat[3]))
-
     speed_check = np.linalg.norm(samples3D[1:, :] - samples3D[0:-1, :], axis=1)/sample_dt
-    print(speed_check)
+    # print(speed_check)
     if plot_traj:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
+
+        # plot the surface
+        xrange = 20
+        yrange = 20
+        xmin = int(round(trans[0]-xrange/2.0))
+        xmax = int(round(trans[0]+xrange/2.0))
+        ymin = int(round(trans[1]-yrange/2.0))
+        ymax = int(round(trans[1]+yrange/2.0))
+        xx, yy = np.meshgrid(range(xmin, xmax), range(ymin, ymax))
+        z = (-plane_norm[0] * xx - plane_norm[1] * yy - plane_d) * 1. /plane_norm[2]
+        ax.plot_surface(xx, yy, z, alpha=0.2)
+        ax.plot(trans[0].tolist(), trans[1].tolist(), trans[2].tolist(), 'rx')
+
+        # plot the points
         ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten())
         ax.plot(samples3D[:, 0].flatten(), samples3D[:, 1].flatten(), samples3D[:, 2].flatten(), 'x')
         # ax.axis('equal')
