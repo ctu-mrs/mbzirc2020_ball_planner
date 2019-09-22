@@ -149,7 +149,7 @@ int main()
     const P_t P = 5*tmp*tmp.transpose();
     const x_t cur_x = cur_pt + normal_randvec(P);
     xs.block(0, it, n_states, 1) = cur_x;
-    Ps.at(it) = P;
+    Ps.at(it) = 0.1*P;
   }
 
   const auto theta_AML = rheiv.fit(xs, Ps);

@@ -1,100 +1,103 @@
 #include <balloon_planner/eight_ukf.h>
 
-template class mrs_lib::UKF<balloon_planner::kf_n_states, balloon_planner::kf_n_inputs, balloon_planner::kf_n_measurements>;
+template class mrs_lib::UKF<balloon_planner::ukf::n_states, balloon_planner::ukf::n_inputs, balloon_planner::ukf::n_measurements>;
 
 namespace balloon_planner
 {
-  using x_t = UKF::x_t;
-  using P_t = UKF::P_t;
-  using u_t = UKF::u_t;
-  using z_t = UKF::z_t;
-  using Q_t = UKF::Q_t;
-  using R_t = UKF::R_t;
-  using statecov_t = UKF::statecov_t;
-  using tra_model_t = UKF::transition_model_t;
-  using obs_model_t = UKF::observation_model_t;
-
-  using Quat = Eigen::Quaterniond;
-  using Vec3 = Eigen::Vector3d;
-  using Vec2 = Eigen::Vector2d;
-
-  // from https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
-  template <typename T>
-  T sign(T val)
+  namespace ukf
   {
-    return (T(0) < val) - (val < T(0));
-  }
+    using x_t = UKF::x_t;
+    using P_t = UKF::P_t;
+    using u_t = UKF::u_t;
+    using z_t = UKF::z_t;
+    using Q_t = UKF::Q_t;
+    using R_t = UKF::R_t;
+    using statecov_t = UKF::statecov_t;
+    using tra_model_t = UKF::transition_model_t;
+    using obs_model_t = UKF::observation_model_t;
 
-  UKF::x_t tra_model_f(const UKF::x_t& in, [[maybe_unused]] const UKF::u_t& u, const double dt)
-  {
-    x_t out;
+    using Quat = Eigen::Quaterniond;
+    using Vec3 = Eigen::Vector3d;
+    using Vec2 = Eigen::Vector2d;
 
-    // Calculate the complete current state with redundant variables
-    const double yaw = in(x_yaw);
-    const double speed = std::max(in(x_s), 0.0);
-    const double curv = in(x_c);
-    // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
-    const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
-    const Vec3 tang(cos(yaw), sin(yaw), 0.0);
-    const Vec3 norm(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
-    const Vec3 vel_tang = speed*tang;
-    const Vec3 acc_norm = curv*speed*speed*norm;
-    const Vec3 dpos = vel_tang*dt + 0.5*acc_norm*dt*dt;
-    const Vec3 pos_world(in(x_x), in(x_y), in(x_z));
+    // from https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
+    template <typename T>
+    T sign(T val)
+    {
+      return (T(0) < val) - (val < T(0));
+    }
 
-    // Calculate the next estimated state
-    const Vec3 n_pos_world = pos_world + quat*dpos;
-    const double n_speed = speed; // assume constant speed
-    const double n_yaw = yaw + speed*curv*dt;
-    const double n_curv = curv;
-    const Quat n_quat = quat; // does not change
+    UKF::x_t tra_model_f(const UKF::x_t& in, [[maybe_unused]] const UKF::u_t& u, const double dt)
+    {
+      x_t out;
 
-    // Copy the calculated values to the respective states
-    out(x_x) = n_pos_world.x();
-    out(x_y) = n_pos_world.y();
-    out(x_z) = n_pos_world.z();
-    out(x_yaw) = n_yaw;
-    out(x_s) = n_speed;
-    out(x_c) = n_curv;
-    out(x_qw) = n_quat.w();
-    out(x_qx) = n_quat.x();
-    out(x_qy) = n_quat.y();
-    out(x_qz) = n_quat.z();
+      // Calculate the complete current state with redundant variables
+      const double yaw = in(x_yaw);
+      const double speed = std::max(in(x_s), 0.0);
+      const double curv = in(x_c);
+      // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
+      const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
+      const Vec3 tang(cos(yaw), sin(yaw), 0.0);
+      const Vec3 norm(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
+      const Vec3 vel_tang = speed*tang;
+      const Vec3 acc_norm = curv*speed*speed*norm;
+      const Vec3 dpos = vel_tang*dt + 0.5*acc_norm*dt*dt;
+      const Vec3 pos_world(in(x_x), in(x_y), in(x_z));
 
-    return out;
-  }
+      // Calculate the next estimated state
+      const Vec3 n_pos_world = pos_world + quat*dpos;
+      const double n_speed = speed; // assume constant speed
+      const double n_yaw = yaw + speed*curv*dt;
+      const double n_curv = curv;
+      const Quat n_quat = quat; // does not change
 
-  // This function implements the observation generation from a state
-  UKF::z_t obs_model_f(const UKF::x_t& state)
-  {
-    z_t observation;
-    observation(z_x) = state(x_x);
-    observation(z_y) = state(x_y);
-    observation(z_z) = state(x_z);
-    return observation;
-  }
+      // Copy the calculated values to the respective states
+      out(x_x) = n_pos_world.x();
+      out(x_y) = n_pos_world.y();
+      out(x_z) = n_pos_world.z();
+      out(x_yaw) = n_yaw;
+      out(x_s) = n_speed;
+      out(x_c) = n_curv;
+      out(x_qw) = n_quat.w();
+      out(x_qx) = n_quat.x();
+      out(x_qy) = n_quat.y();
+      out(x_qz) = n_quat.z();
 
-  double normalize_angle(double in)
-  {
-    double out = std::fmod(in, 2*M_PI);
-    if (out > M_PI)
-      out -= 2*M_PI;
-    else if (out < -M_PI)
-      out += 2*M_PI;
-    return out;
-  }
+      return out;
+    }
 
-  UKF::x_t normalize_state(const UKF::x_t& in)
-  {
-    UKF::x_t out = in;
-    out(x_yaw) = normalize_angle(in(x_yaw));
-    // TODO: normalize the quaternion as well?
-    /* const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized(); */
-    /* out(x_qw) = quat.w(); */
-    /* out(x_qx) = quat.x(); */
-    /* out(x_qy) = quat.y(); */
-    /* out(x_qz) = quat.z(); */
-    return out;
+    // This function implements the observation generation from a state
+    UKF::z_t obs_model_f(const UKF::x_t& state)
+    {
+      z_t observation;
+      observation(z_x) = state(x_x);
+      observation(z_y) = state(x_y);
+      observation(z_z) = state(x_z);
+      return observation;
+    }
+
+    double normalize_angle(double in)
+    {
+      double out = std::fmod(in, 2*M_PI);
+      if (out > M_PI)
+        out -= 2*M_PI;
+      else if (out < -M_PI)
+        out += 2*M_PI;
+      return out;
+    }
+
+    UKF::x_t normalize_state(const UKF::x_t& in)
+    {
+      UKF::x_t out = in;
+      out(x_yaw) = normalize_angle(in(x_yaw));
+      // TODO: normalize the quaternion as well?
+      /* const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized(); */
+      /* out(x_qw) = quat.w(); */
+      /* out(x_qx) = quat.x(); */
+      /* out(x_qy) = quat.y(); */
+      /* out(x_qz) = quat.z(); */
+      return out;
+    }
   }
 }
 

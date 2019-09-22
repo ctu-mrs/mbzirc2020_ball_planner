@@ -294,16 +294,16 @@ namespace balloon_planner
     m_max_time_since_update = cfg.max_time_since_update;
     m_min_updates_to_confirm = cfg.min_updates_to_confirm;
 
-    m_process_std(x_x) = m_process_std(x_y) = m_process_std(x_y) = cfg.process_std__position;
-    m_process_std(x_yaw) = cfg.process_std__yaw;
-    m_process_std(x_s) = cfg.process_std__speed;
-    m_process_std(x_c) = cfg.process_std__curvature;
-    m_process_std(x_qw) = m_process_std(x_qx) = m_process_std(x_qy) = m_process_std(x_qz) = cfg.process_std__quaternion;
+    m_process_std(ukf::x_x) = m_process_std(ukf::x_y) = m_process_std(ukf::x_y) = cfg.process_std__position;
+    m_process_std(ukf::x_yaw) = cfg.process_std__yaw;
+    m_process_std(ukf::x_s) = cfg.process_std__speed;
+    m_process_std(ukf::x_c) = cfg.process_std__curvature;
+    m_process_std(ukf::x_qw) = m_process_std(ukf::x_qx) = m_process_std(ukf::x_qy) = m_process_std(ukf::x_qz) = cfg.process_std__quaternion;
 
-    m_init_std(x_yaw) = cfg.init_std__yaw;
-    m_init_std(x_s) = cfg.init_std__speed;
-    m_init_std(x_c) = cfg.init_std__curvature;
-    m_init_std(x_qw) = m_init_std(x_qx) = m_init_std(x_qy) = m_init_std(x_qz) = cfg.init_std__quaternion;
+    m_init_std(ukf::x_yaw) = cfg.init_std__yaw;
+    m_init_std(ukf::x_s) = cfg.init_std__speed;
+    m_init_std(ukf::x_c) = cfg.init_std__curvature;
+    m_init_std(ukf::x_qw) = m_init_std(ukf::x_qx) = m_init_std(ukf::x_qy) = m_init_std(ukf::x_qz) = cfg.init_std__quaternion;
   }
   //}
 
@@ -370,9 +370,9 @@ void BalloonPlanner::onInit()
   //}
 
   {
-    UKF::transition_model_t tra_model(tra_model_f);
-    UKF::observation_model_t obs_model(obs_model_f);
-    m_ukf = UKF(tra_model_f, obs_model_f);
+    UKF::transition_model_t tra_model(ukf::tra_model_f);
+    UKF::observation_model_t obs_model(ukf::obs_model_f);
+    m_ukf = UKF(ukf::tra_model_f, ukf::obs_model_f);
   }
   reset_current_estimate();
   m_is_initialized = true;

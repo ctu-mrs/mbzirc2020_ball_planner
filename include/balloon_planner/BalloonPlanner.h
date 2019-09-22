@@ -35,6 +35,7 @@
 
 // local includes
 #include <balloon_planner/eight_ukf.h>
+#include <balloon_planner/eight_rheiv.h>
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_planner/ResetChosen.h>
 #include <object_detect/PoseWithCovarianceArrayStamped.h>
@@ -52,6 +53,8 @@ namespace balloon_planner
   using ros_pose_t = ros_poses_t::value_type::_pose_type;
   using ros_cov_t = ros_poses_t::value_type::_covariance_type;
 
+  using RHEIV = rheiv::RHEIV;
+  using UKF = ukf::UKF;
   using pos_t = UKF::z_t;
   using cov_t = UKF::R_t;
   struct pos_cov_t
@@ -110,6 +113,8 @@ namespace balloon_planner
 
       ros::Timer m_main_loop_timer;
       //}
+
+      RHEIV m_rheiv;
 
       UKF m_ukf;
       bool m_current_estimate_exists;
