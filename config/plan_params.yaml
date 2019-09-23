@@ -20,3 +20,7 @@ init_std:
 z_bounds: # measurements outside these bounds will be ignored
   min: 5  # metres
   max: 10 # metres
+
+rheiv:
+  fitting_period: 0.1 # seconds
+  min_points: 20

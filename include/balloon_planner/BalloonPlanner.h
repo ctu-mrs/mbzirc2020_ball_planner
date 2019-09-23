@@ -28,6 +28,10 @@
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/subscribe_handler.h>
 #include <mrs_lib/DynamicReconfigureMgr.h>
+#include <mrs_lib/threadsaved.h>
+
+// Boost
+#include <boost/circular_buffer.hpp>
 
 // std
 #include <string>
@@ -55,8 +59,8 @@ namespace balloon_planner
 
   using RHEIV = rheiv::RHEIV;
   using UKF = ukf::UKF;
-  using pos_t = UKF::z_t;
-  using cov_t = UKF::R_t;
+  using pos_t = RHEIV::x_t;
+  using cov_t = RHEIV::P_t;
   struct pos_cov_t
   {
     pos_t pos;
@@ -76,6 +80,7 @@ namespace balloon_planner
     private:
       const std::string m_node_name;
       void main_loop([[maybe_unused]] const ros::TimerEvent& evt);
+      void rheiv_loop(const ros::TimerEvent& evt);
 
     private:
       std::unique_ptr<mrs_lib::Profiler> m_profiler_ptr;
@@ -87,6 +92,8 @@ namespace balloon_planner
       // --------------------------------------------------------------
 
       /* Parameters, loaded from ROS //{ */
+      double m_rheiv_fitting_period;
+      int m_rheiv_min_pts;
       std::string m_world_frame;
       std::string m_uav_frame_id;
       double m_gating_distance;
@@ -112,9 +119,13 @@ namespace balloon_planner
       ros::ServiceServer m_reset_chosen_server;
 
       ros::Timer m_main_loop_timer;
+      ros::Timer m_rheiv_loop_timer;
       //}
 
       RHEIV m_rheiv;
+      boost::circular_buffer<pos_t> m_rheiv_pts;
+      boost::circular_buffer<cov_t> m_rheiv_covs;
+      mrs_lib::threadsaved<rheiv::theta_t> m_plane_theta;
 
       UKF m_ukf;
       bool m_current_estimate_exists;
@@ -149,9 +160,14 @@ namespace balloon_planner
       cov_t rotate_covariance(const cov_t& covariance, const cov_t& rotation);
       bool point_valid(const pos_t& pt);
 
+      /* UKF related methods //{ */
       bool update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas);
       bool init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas);
       void reset_current_estimate();
+      //}
+
+      rheiv::theta_t fit_plane(const boost::circular_buffer<pos_t>& points, const boost::circular_buffer<cov_t>& covs);
+
       pos_t get_pos(const UKF::x_t& x);
       pos_cov_t get_pos_cov(const UKF::statecov_t& statecov);
       geometry_msgs::PoseWithCovarianceStamped to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header);

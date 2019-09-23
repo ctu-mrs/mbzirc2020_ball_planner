@@ -7,18 +7,12 @@ namespace balloon_planner
   namespace rheiv
   {
     using x_t = RHEIV::x_t;
-    using xs_t = RHEIV::xs_t;
     using u_t = RHEIV::u_t;
 
     using P_t = RHEIV::P_t;
-    using Ps_t = RHEIV::Ps_t;
 
     using z_t = RHEIV::z_t;
     using zs_t = RHEIV::zs_t;
-    using theta_t = RHEIV::theta_t;
-
-    using f_z_t = RHEIV::f_z_t;
-    using dzdx_t = RHEIV::dzdx_t;
 
     using Quat = Eigen::Quaterniond;
     using Vec3 = Eigen::Vector3d;

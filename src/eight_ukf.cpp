@@ -108,6 +108,7 @@ namespace balloon_planner
 #include <random>
 
 using namespace balloon_planner;
+using namespace balloon_planner::ukf;
 
 /* load_csv() function //{ */
 // from https://stackoverflow.com/questions/34247057/how-to-read-csv-file-and-assign-to-eigen-matrix
@@ -202,7 +203,7 @@ int main()
   tra_model_t tra_model(tra_model_f);
   obs_model_t obs_model(obs_model_f);
 
-  UKF ukf(1e-3, 1, 2, Q, tra_model, obs_model);
+  UKF ukf(tra_model, obs_model);
 
   const double R_std = 1e-1;
   const R_t R = R_std*R_t::Identity();
@@ -221,9 +222,9 @@ int main()
       );
   const P_t P0 = 1e2*Q;
   double err_acc = 0.0;
-  const int err_states = std::min(cols, kf_n_states);
+  const int err_states = std::min(cols, n_states);
   statecov_t sc {x0, P0};
-  Eigen::MatrixXd est_states(n_pts, kf_n_states);
+  Eigen::MatrixXd est_states(n_pts, n_states);
   for (int it = 0; it < n_pts; it++)
   {
     std::cout << "iteration " << it << std::endl;
@@ -234,7 +235,7 @@ int main()
     const auto cur_meas = cur_pt + normal_randmat(R);
 
     std::cout << "ukf state: " << std::endl << sc.x.transpose() << std::endl;
-    sc = ukf.predict(sc, u_t(), dt);
+    sc = ukf.predict(sc, u_t(), Q, dt);
     sc.x = normalize_state(sc.x);
     std::cout << "state prediction: " << std::endl << sc.x.transpose() << std::endl;
     sc = ukf.correct(sc, cur_meas, R);
@@ -243,7 +244,7 @@ int main()
     const double cur_err = (cur_gt-cur_est).norm();
     err_acc += cur_err;
     std::cout << "state correction: " << std::endl << sc.x.transpose() << std::endl;
-    est_states.block<1, kf_n_states>(it, 0) = sc.x.transpose();
+    est_states.block<1, n_states>(it, 0) = sc.x.transpose();
 
     /* std::cout << "state covariance: " << std::endl << sc.P << std::endl; */
     std::cout << "current error: " << std::endl << cur_err << std::endl;

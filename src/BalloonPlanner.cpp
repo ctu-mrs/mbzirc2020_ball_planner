@@ -61,6 +61,35 @@ namespace balloon_planner
   }
   //}
 
+  /* rheiv_loop() method //{ */
+  void BalloonPlanner::rheiv_loop(const ros::TimerEvent& evt)
+  {
+    ros::Duration d_cbk;
+    if (m_rheiv_pts.size() > (size_t)m_rheiv_min_pts)
+    {
+      const rheiv::theta_t theta = fit_plane(m_rheiv_pts, m_rheiv_covs);
+      m_plane_theta = theta;
+  
+      d_cbk = ros::Time::now() - evt.current_real;
+      ROS_INFO_STREAM("[RHEIV]: Fitted new plane estimate: " << theta.transpose() << ", in " << d_cbk.toSec() << "s.");
+    } else
+    {
+      ROS_INFO_STREAM("[RHEIV]: Not enough points to fit plane (" << m_rheiv_pts.size() << "/ " << m_rheiv_min_pts << ").");
+      d_cbk = ros::Time::now() - evt.current_real;
+    }
+  
+    // start the fitting process again with the desired delay
+    ros::Duration d_remaining = ros::Duration(m_rheiv_fitting_period) - d_cbk;
+    if (d_remaining < ros::Duration(0))
+      d_remaining = ros::Duration(0);
+    m_rheiv_loop_timer.setPeriod(d_remaining, true);
+  }
+  //}
+
+  // --------------------------------------------------------------
+  // |                     UKF related methods                    |
+  // --------------------------------------------------------------
+
   /* update_current_estimate() method //{ */
   bool BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas)
   {
@@ -108,6 +137,32 @@ namespace balloon_planner
     return meas_valid;
   }
   //}
+
+  /* reset_current_estimate() method //{ */
+  void BalloonPlanner::reset_current_estimate()
+  {
+    m_current_estimate_exists = false;
+    m_current_estimate_last_update = ros::Time::now();
+    m_current_estimate_n_updates = 0;
+    ROS_INFO("[%s]: Current chosen balloon ==RESET==.", m_node_name.c_str());
+  }
+  //}
+
+  // --------------------------------------------------------------
+  // |                    RHEIV related methods                   |
+  // --------------------------------------------------------------
+
+  /* fit_plane() method //{ */
+  rheiv::theta_t BalloonPlanner::fit_plane(const boost::circular_buffer<pos_t>& points, const boost::circular_buffer<cov_t>& covs)
+  {
+    const rheiv::theta_t ret = m_rheiv.fit(points.begin(), points.end(), covs.begin(), covs.end());
+    return ret;
+  }
+  //}
+
+  // --------------------------------------------------------------
+  // |                       Helper methods                       |
+  // --------------------------------------------------------------
 
   /* get_pos() method //{ */
   pos_t BalloonPlanner::get_pos(const UKF::x_t& x)
@@ -275,16 +330,6 @@ namespace balloon_planner
   }
   //}
 
-  /* reset_current_estimate() method //{ */
-  void BalloonPlanner::reset_current_estimate()
-  {
-    m_current_estimate_exists = false;
-    m_current_estimate_last_update = ros::Time::now();
-    m_current_estimate_n_updates = 0;
-    ROS_INFO("[%s]: Current chosen balloon ==RESET==.", m_node_name.c_str());
-  }
-  //}
-
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
@@ -326,6 +371,9 @@ void BalloonPlanner::onInit()
   mrs_lib::ParamLoader pl(nh, m_node_name);
 
   double planning_period = pl.load_param2<double>("planning_period");
+  pl.load_param("rheiv/fitting_period", m_rheiv_fitting_period);
+  pl.load_param("rheiv/min_points", m_rheiv_min_pts);
+
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
   pl.load_param("gating_distance", m_gating_distance);
@@ -374,12 +422,18 @@ void BalloonPlanner::onInit()
     UKF::observation_model_t obs_model(ukf::obs_model_f);
     m_ukf = UKF(ukf::tra_model_f, ukf::obs_model_f);
   }
+  {
+    const rheiv::f_z_t f_z(rheiv::f_z_f);
+    const rheiv::dzdx_t dzdx = rheiv::dzdx_t::Identity();
+    m_rheiv = RHEIV(f_z, dzdx, 1e-15, 1e4);
+  }
   reset_current_estimate();
   m_is_initialized = true;
 
   /* timers  //{ */
 
   m_main_loop_timer = nh.createTimer(ros::Duration(planning_period), &BalloonPlanner::main_loop, this);
+  m_rheiv_loop_timer = nh.createTimer(ros::Duration(m_rheiv_fitting_period), &BalloonPlanner::rheiv_loop, this, true /*oneshot*/);
 
   //}
 
