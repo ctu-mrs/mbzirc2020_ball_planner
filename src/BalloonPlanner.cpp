@@ -14,7 +14,7 @@ namespace balloon_planner
   
       if (!balloons.poses.empty())
       {
-        ROS_INFO("[%s]: Processing %lu new detections vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", m_node_name.c_str(), balloons.poses.size());
+        /* ROS_INFO("[%s]: Processing %lu new detections vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", m_node_name.c_str(), balloons.poses.size()); */
         
         // transform the message to usable measurement format
         std::vector<pos_cov_t> measurements = message_to_positions(balloons);
@@ -25,7 +25,7 @@ namespace balloon_planner
         // copy the latest plane fit
         const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
 
-        if (plane_theta_valid && m_pub_used_meas.getNumSubscribers() > 0)
+        if (plane_theta_valid && m_pub_plane_dbg.getNumSubscribers() > 0)
         {
           std_msgs::Header header;
           header.frame_id = m_world_frame;
@@ -40,9 +40,9 @@ namespace balloon_planner
           pos_cov_t used_meas;
           bool used_meas_valid = false;
           if (m_ukf_estimate_exists)
-            used_meas_valid = update_current_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
+            used_meas_valid = update_ukf_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
           else
-            used_meas_valid = init_current_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
+            used_meas_valid = init_ukf_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
 
           if (used_meas_valid)
           {
@@ -57,35 +57,40 @@ namespace balloon_planner
         {
           if (!plane_theta_valid)
           {
-            ROS_WARN_STREAM("[UKF] RHEIV plane theta estimate unavailable, cannot update UKF!");
+            ROS_WARN_STREAM_THROTTLE(MSG_THROTTLE, "[UKF] RHEIV plane theta estimate unavailable, cannot update UKF!");
           }
           if (!measurements.empty())
           {
-            ROS_WARN_STREAM("[UKF] Got empty detection message, cannot update UKF!");
+            ROS_WARN_STREAM_THROTTLE(MSG_THROTTLE, "[UKF] Got empty detection message, cannot update UKF!");
           }
         } // if (!measurements.empty() && plane_theta_valid)
 
         ros::Duration del = ros::Time::now() - balloons.header.stamp;
-        ROS_INFO_STREAM("delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
-        ROS_INFO("[%s]: New data processed          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", m_node_name.c_str());
+        ROS_INFO_STREAM_THROTTLE(MSG_THROTTLE, "[UKF]: delay (from image acquisition): " << del.toSec() * 1000.0 << "ms");
+        /* ROS_INFO("[%s]: New data processed          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", m_node_name.c_str()); */
       } else
       {
-        ROS_INFO_THROTTLE(1.0, "[%s]: Empty detections message received", m_node_name.c_str());
+        ROS_INFO_THROTTLE(MSG_THROTTLE, "[%s]: Empty detections message received", m_node_name.c_str());
       }
     }
     if ((ros::Time::now() - m_ukf_last_update).toSec() >= m_max_time_since_update)
     {
-      reset_current_estimate();
+      reset_ukf_estimate();
     }
 
     if (m_ukf_estimate_exists && m_ukf_n_updates > m_min_updates_to_confirm)
     {
-      std_msgs::Header header;
-      header.frame_id = m_world_frame;
-      header.stamp = m_ukf_last_update;
-      const auto cur_pos_cov = get_pos_cov(m_ukf_estimate);
-      m_pub_chosen_balloon.publish(to_output_message(cur_pos_cov, header));
-      ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_ukf_estimate.x.x(), m_ukf_estimate.x.y(), m_ukf_estimate.x.z());
+      const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
+      if (plane_theta_valid)
+      {
+        std_msgs::Header header;
+        header.frame_id = m_world_frame;
+        header.stamp = ros::Time::now();
+        const auto cur_estimate = predict_ukf_estimate(header.stamp, plane_theta);
+        const auto cur_pos_cov = get_pos_cov(cur_estimate);
+        m_pub_chosen_balloon.publish(to_output_message(cur_pos_cov, header));
+        ROS_WARN_STREAM_THROTTLE(MSG_THROTTLE, "[UKF]: Current UKF prediction:" << std::endl << "[\tx\t\ty\t\tz\t\tyaw\t\tspd\t\tcur\t\tqw\t\tqx\t\tqy\t\tqz\t]" << std::endl << "[" << cur_estimate.x.transpose() << "]");
+      }
     }
   }
   //}
@@ -110,18 +115,25 @@ namespace balloon_planner
           m_rheiv_theta_valid = true;
           m_rheiv_theta = theta;
         }
-        ROS_INFO_STREAM("[RHEIV]: Fitted new plane estimate: [" << theta.transpose() << "], in " << (ros::Time::now() - fit_time_start).toSec() << "s.");
+        ROS_INFO_STREAM_THROTTLE(MSG_THROTTLE, "[RHEIV]: Fitted new plane estimate to " << rheiv_pts.size() << " points: [" << theta.transpose() << "], in " << (ros::Time::now() - fit_time_start).toSec() << "s.");
       } catch (const mrs_lib::eigenvector_exception& ex)
       {
         // Fitting threw exception, notify the user.
-        ROS_WARN_STREAM("[RHEIV]: Could not fit plane: '" << ex.what() << "' (took " << (ros::Time::now() - fit_time_start).toSec() << "s).");
+        ROS_WARN_STREAM_THROTTLE(MSG_THROTTLE, "[RHEIV]: Could not fit plane: '" << ex.what() << "' (took " << (ros::Time::now() - fit_time_start).toSec() << "s).");
       }
     } else
     {
       // Still waiting for enough points to fit the plane through.
-      ROS_WARN_STREAM("[RHEIV]: Not enough points to fit plane (" << rheiv_pts.size() << "/ " << m_rheiv_min_pts << ").");
+      ROS_WARN_STREAM_THROTTLE(MSG_THROTTLE, "[RHEIV]: Not enough points to fit plane (" << rheiv_pts.size() << "/ " << m_rheiv_min_pts << ").");
     }
   
+    if (m_pub_used_pts.getNumSubscribers() > 0)
+    {
+      std_msgs::Header header;
+      header.frame_id = m_world_frame;
+      header.stamp = ros::Time::now();
+      m_pub_used_pts.publish(to_output_message(rheiv_pts, header));
+    }
     /* // start the fitting process again after the desired delay */
     /* ros::Duration d_remaining = ros::Duration(m_rheiv_fitting_period) - d_cbk; */
     /* if (d_remaining < ros::Duration(0)) */
@@ -136,14 +148,15 @@ namespace balloon_planner
   /* prediction_loop() method //{ */
   void BalloonPlanner::prediction_loop([[maybe_unused]] const ros::TimerEvent& evt)
   {
-    [[maybe_unused]] const auto [ukf_estimate_exists, ukf_estimate, ukf_last_update, _1] = get_ukf_status();
-    if (ukf_estimate_exists)
+    const auto [ukf_estimate_exists, ukf_estimate, ukf_last_update, ukf_n_updates] = get_ukf_status();
+    const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
+    if (ukf_estimate_exists && ukf_n_updates > m_min_updates_to_confirm && plane_theta_valid)
     {
-      const auto predictions = predict_path(ukf_estimate, m_prediction_horizon, m_prediction_step);
+      const auto predictions = predict_states(ukf_estimate, m_prediction_horizon, m_prediction_step);
       std_msgs::Header header;
       header.frame_id = m_world_frame;
       header.stamp = ukf_last_update;
-      m_pub_pred_path.publish(to_output_message(predictions, header));
+      m_pub_pred_path.publish(to_output_message(predictions, header, plane_theta));
     }
   }
   //}
@@ -152,18 +165,28 @@ namespace balloon_planner
   // |                     UKF related methods                    |
   // --------------------------------------------------------------
 
-  /* update_current_estimate() method //{ */
-  bool BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta)
+  /* predict_ukf_estimate() method //{ */
+  UKF::statecov_t BalloonPlanner::predict_ukf_estimate(const ros::Time& to_stamp, const theta_t& plane_theta)
   {
-    UKF::statecov_t ukf_estimate;
-    ros::Time ukf_last_update;
-    int ukf_n_updates;
-    {
-      std::scoped_lock lck(m_ukf_estimate_mtx);
-      ukf_estimate = m_ukf_estimate;
-      ukf_last_update = m_ukf_last_update;
-      ukf_n_updates = m_ukf_n_updates;
-    }
+    const double dt = (to_stamp - m_ukf_last_update).toSec();
+    const UKF::Q_t Q = dt*m_process_std.asDiagonal();
+  
+    const quat_t plane_quat = plane_orientation(plane_theta);
+    auto ukf_estimate = m_ukf_estimate;
+    ukf_estimate.x(ukf::x_qw) = plane_quat.w();
+    ukf_estimate.x(ukf::x_qx) = plane_quat.x();
+    ukf_estimate.x(ukf::x_qy) = plane_quat.y();
+    ukf_estimate.x(ukf::x_qz) = plane_quat.z();
+  
+    const auto ret = m_ukf.predict(ukf_estimate, UKF::u_t(), Q, dt);
+    return ret;
+  }
+  //}
+
+  /* update_ukf_estimate() method //{ */
+  bool BalloonPlanner::update_ukf_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta)
+  {
+    auto [ukf_estimate_exists, ukf_estimate, ukf_last_update, ukf_n_updates] = get_ukf_status();
 
     pos_cov_t closest_meas;
     const auto cur_pos = get_pos(ukf_estimate.x);
@@ -171,63 +194,76 @@ namespace balloon_planner
 
     if (meas_valid)
     {
-      ROS_INFO("[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
+      ROS_INFO("[UKF]: Updating current estimate using point [%.2f, %.2f, %.2f]", closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - ukf_last_update).toSec();
       const UKF::Q_t Q = dt*m_process_std.asDiagonal();
+
+      const quat_t plane_quat = plane_orientation(plane_theta);
+      ukf_estimate.x(ukf::x_qw) = plane_quat.w();
+      ukf_estimate.x(ukf::x_qx) = plane_quat.x();
+      ukf_estimate.x(ukf::x_qy) = plane_quat.y();
+      ukf_estimate.x(ukf::x_qz) = plane_quat.z();
+
       ukf_estimate = m_ukf.predict(ukf_estimate, UKF::u_t(), Q, dt);
       ukf_estimate = m_ukf.correct(ukf_estimate, closest_meas.pos, closest_meas.cov);
       ukf_last_update = stamp;
       ukf_n_updates++;
       used_meas = closest_meas;
+      ukf_estimate_exists = true;
 
       {
         std::scoped_lock lck(m_ukf_estimate_mtx);
+        m_ukf_estimate_exists = ukf_estimate_exists;
         m_ukf_estimate = ukf_estimate;
         m_ukf_last_update = ukf_last_update;
         m_ukf_n_updates = ukf_n_updates;
       }
     } else
     {
-      ROS_INFO("[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), ukf_estimate.x.x(), ukf_estimate.x.y(), ukf_estimate.x.z());
+      ROS_INFO("[UKF]: No point is close enough to [%.2f, %.2f, %.2f]", ukf_estimate.x.x(), ukf_estimate.x.y(), ukf_estimate.x.z());
     }
     return meas_valid;
   }
   //}
 
-  /* init_current_estimate() method //{ */
-  bool BalloonPlanner::init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta)
+  /* init_ukf_estimate() method //{ */
+  bool BalloonPlanner::init_ukf_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta)
   {
     pos_cov_t closest_meas;
     bool meas_valid = find_closest(measurements, closest_meas);
     if (meas_valid)
     {
-      ROS_INFO("[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
-
-      m_ukf_estimate.x = UKF::x_t::Zero();
-      m_ukf_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
-
       const quat_t plane_quat = plane_orientation(plane_theta);
-      m_ukf_estimate.x(ukf::x_qw) = plane_quat.w();
-      m_ukf_estimate.x(ukf::x_qx) = plane_quat.x();
-      m_ukf_estimate.x(ukf::x_qy) = plane_quat.y();
-      m_ukf_estimate.x(ukf::x_qz) = plane_quat.z();
+      ROS_INFO("[UKF]: Initializing estimate using point [%.2f, %.2f, %.2f]", closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
 
-      m_ukf_estimate.P = m_init_std.asDiagonal();
-      m_ukf_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
-      m_ukf_estimate_exists = true;
-      m_ukf_last_update = stamp;
-      m_ukf_n_updates = 1;
+      {
+        std::scoped_lock lck(m_ukf_estimate_mtx);
+
+        m_ukf_estimate.x = UKF::x_t::Zero();
+        m_ukf_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
+
+        m_ukf_estimate.x(ukf::x_qw) = plane_quat.w();
+        m_ukf_estimate.x(ukf::x_qx) = plane_quat.x();
+        m_ukf_estimate.x(ukf::x_qy) = plane_quat.y();
+        m_ukf_estimate.x(ukf::x_qz) = plane_quat.z();
+
+        m_ukf_estimate.P = m_init_std.asDiagonal();
+        m_ukf_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
+        m_ukf_estimate_exists = true;
+        m_ukf_last_update = stamp;
+        m_ukf_n_updates = 1;
+      }
       used_meas = closest_meas;
     } else
     {
-      ROS_INFO("[%s]: No point is valid for estimate initialization", m_node_name.c_str());
+      ROS_INFO("[UKF]: No point is valid for estimate initialization");
     }
     return meas_valid;
   }
   //}
 
-  /* reset_current_estimate() method //{ */
-  void BalloonPlanner::reset_current_estimate()
+  /* reset_ukf_estimate() method //{ */
+  void BalloonPlanner::reset_ukf_estimate()
   {
     m_ukf_estimate_exists = false;
     m_ukf_last_update = ros::Time::now();
@@ -236,8 +272,8 @@ namespace balloon_planner
   }
   //}
 
-  /* predict_path() method //{ */
-  std::vector<pos_t> BalloonPlanner::predict_path(const UKF::statecov_t initial_statecov, const double prediction_horizon, const double prediction_step)
+  /* predict_states() method //{ */
+  std::vector<UKF::x_t> BalloonPlanner::predict_states(const UKF::statecov_t initial_statecov, const double prediction_horizon, const double prediction_step)
   {
     assert(prediction_step > 0.0);
     assert(prediction_horizon > 0.0);
@@ -245,13 +281,13 @@ namespace balloon_planner
     const UKF::Q_t Q = prediction_step*m_process_std.asDiagonal();
   
     UKF::statecov_t statecov = initial_statecov;
-    std::vector<pos_t> ret;
+    std::vector<UKF::x_t> ret;
     ret.reserve(n_pts);
-    ret.push_back(get_pos(statecov.x));
+    ret.push_back(statecov.x);
     for (int it = 0; it < n_pts; it++)
     {
       statecov = m_ukf.predict(statecov, UKF::u_t(), Q, prediction_step);
-      ret.push_back(get_pos(statecov.x));
+      ret.push_back(statecov.x);
     }
     return ret;
   }
@@ -322,77 +358,163 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  visualization_msgs::Marker BalloonPlanner::to_output_message(const theta_t& plane_theta, const std_msgs::Header& header, const pos_t& origin)
+  visualization_msgs::MarkerArray BalloonPlanner::to_output_message(const theta_t& plane_theta, const std_msgs::Header& header, const pos_t& origin)
   {
-    visualization_msgs::Marker ret;
+    visualization_msgs::MarkerArray ret;
   
     const auto quat = plane_orientation(plane_theta);
     const auto pos = plane_origin(plane_theta, origin);
 
-    ret.header = header;
-
-    ret.ns = "plane";
-    ret.id = 0;
-    ret.type = visualization_msgs::Marker::TRIANGLE_LIST;
-    ret.action = visualization_msgs::Marker::ADD;
-
-    ret.pose.position.x = pos.x();
-    ret.pose.position.y = pos.y();
-    ret.pose.position.z = pos.z();
-
-    ret.pose.orientation.x = quat.x();
-    ret.pose.orientation.y = quat.y();
-    ret.pose.orientation.z = quat.z();
-    ret.pose.orientation.w = quat.w();
-
-    ret.scale.x = 1;
-    ret.scale.y = 1;
-    ret.scale.z = 1;
-
-    ret.color.a = 0.2; // Don't forget to set the alpha!
-    ret.color.r = 0.0;
-    ret.color.g = 0.0;
-    ret.color.b = 1.0;
-
-    const double size = 20;
+    const double size = m_rheiv_visualization_size;
     geometry_msgs::Point ptA; ptA.x = size; ptA.y = size; ptA.z = 0;
     geometry_msgs::Point ptB; ptB.x = -size; ptB.y = size; ptB.z = 0;
     geometry_msgs::Point ptC; ptC.x = -size; ptC.y = -size; ptC.z = 0;
     geometry_msgs::Point ptD; ptD.x = size; ptD.y = -size; ptD.z = 0;
 
-    // triangle ABC
-    ret.points.push_back(ptA);
-    ret.points.push_back(ptB);
-    ret.points.push_back(ptC);
+    /* borders marker //{ */
+    {
+      visualization_msgs::Marker borders_marker;
+      borders_marker.header = header;
+    
+      borders_marker.ns = "borders";
+      borders_marker.id = 0;
+      borders_marker.type = visualization_msgs::Marker::LINE_LIST;
+      borders_marker.action = visualization_msgs::Marker::ADD;
+    
+      borders_marker.pose.position.x = pos.x();
+      borders_marker.pose.position.y = pos.y();
+      borders_marker.pose.position.z = pos.z();
+    
+      borders_marker.pose.orientation.x = quat.x();
+      borders_marker.pose.orientation.y = quat.y();
+      borders_marker.pose.orientation.z = quat.z();
+      borders_marker.pose.orientation.w = quat.w();
+    
+      borders_marker.scale.x = 0.1;
+      borders_marker.scale.y = 0.1;
+      borders_marker.scale.z = 0.1;
+    
+      borders_marker.color.a = 0.5; // Don't forget to set the alpha!
+      borders_marker.color.r = 0.0;
+      borders_marker.color.g = 0.0;
+      borders_marker.color.b = 1.0;
+    
+      borders_marker.points.push_back(ptA);
+      borders_marker.points.push_back(ptB);
 
-    // triangle ACD
-    ret.points.push_back(ptA);
-    ret.points.push_back(ptC);
-    ret.points.push_back(ptD);
+      borders_marker.points.push_back(ptB);
+      borders_marker.points.push_back(ptC);
+
+      borders_marker.points.push_back(ptC);
+      borders_marker.points.push_back(ptD);
+
+      borders_marker.points.push_back(ptD);
+      borders_marker.points.push_back(ptA);
+
+      ret.markers.push_back(borders_marker);
+    }
+    //}
+
+    /* plane marker //{ */
+    {
+      visualization_msgs::Marker plane_marker;
+      plane_marker.header = header;
+    
+      plane_marker.ns = "plane";
+      plane_marker.id = 1;
+      plane_marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
+      plane_marker.action = visualization_msgs::Marker::ADD;
+    
+      plane_marker.pose.position.x = pos.x();
+      plane_marker.pose.position.y = pos.y();
+      plane_marker.pose.position.z = pos.z();
+    
+      plane_marker.pose.orientation.x = quat.x();
+      plane_marker.pose.orientation.y = quat.y();
+      plane_marker.pose.orientation.z = quat.z();
+      plane_marker.pose.orientation.w = quat.w();
+    
+      plane_marker.scale.x = 1;
+      plane_marker.scale.y = 1;
+      plane_marker.scale.z = 1;
+    
+      plane_marker.color.a = 0.2; // Don't forget to set the alpha!
+      plane_marker.color.r = 0.0;
+      plane_marker.color.g = 0.0;
+      plane_marker.color.b = 1.0;
+    
+      // triangle ABC
+      plane_marker.points.push_back(ptA);
+      plane_marker.points.push_back(ptB);
+      plane_marker.points.push_back(ptC);
+    
+      // triangle ACD
+      plane_marker.points.push_back(ptA);
+      plane_marker.points.push_back(ptC);
+      plane_marker.points.push_back(ptD);
+      ret.markers.push_back(plane_marker);
+    }
+    //}
 
     return ret;
   }
   //}
 
   /* to_output_message() method //{ */
-  nav_msgs::Path BalloonPlanner::to_output_message(const std::vector<pos_t>& predictions, const std_msgs::Header& header)
+  nav_msgs::Path BalloonPlanner::to_output_message(const std::vector<UKF::x_t>& predictions, const std_msgs::Header& header, const theta_t& plane_theta)
   {
     nav_msgs::Path ret;
     ret.header = header;
     ret.poses.reserve(predictions.size());
+    const quat_t plane_quat = plane_orientation(plane_theta);
   
     for (const auto& pred : predictions)
     {
+      const quat_t yaw_quat(Eigen::AngleAxisd(pred(ukf::x_yaw), Eigen::Vector3d::UnitX()));
+      const quat_t ori_quat = plane_quat*yaw_quat;
       geometry_msgs::PoseStamped pose;
       pose.header = header;
       pose.pose.position.x = pred.x();
       pose.pose.position.y = pred.y();
       pose.pose.position.z = pred.z();
-      pose.pose.orientation.x = 0.0;
-      pose.pose.orientation.y = 0.0;
-      pose.pose.orientation.z = 0.0;
-      pose.pose.orientation.w = 1.0;
+      pose.pose.orientation.x = ori_quat.x();
+      pose.pose.orientation.y = ori_quat.y();
+      pose.pose.orientation.z = ori_quat.z();
+      pose.pose.orientation.w = ori_quat.w();
       ret.poses.push_back(pose);
+    }
+  
+    return ret;
+  }
+  //}
+
+  /* to_output_message() method //{ */
+  sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const boost::circular_buffer<pos_t>& points, const std_msgs::Header& header)
+  {
+    const size_t n_pts = points.size();
+    sensor_msgs::PointCloud2 ret;
+    ret.header = header;
+    ret.height = 1;
+    ret.width = n_pts;
+  
+    {
+      // Prepare the PointCloud2
+      sensor_msgs::PointCloud2Modifier modifier(ret);
+      modifier.setPointCloud2FieldsByString(1, "xyz");
+      modifier.reserve(n_pts);
+    }
+  
+    {
+      // Fill the PointCloud2
+      sensor_msgs::PointCloud2Iterator<float> iter_x(ret, "x");
+      sensor_msgs::PointCloud2Iterator<float> iter_y(ret, "y");
+      sensor_msgs::PointCloud2Iterator<float> iter_z(ret, "z");
+      for (size_t it = 0; it < n_pts; it++, ++iter_x, ++iter_y, ++iter_z)
+      {
+        *iter_x = points.at(it).x();
+        *iter_y = points.at(it).y();
+        *iter_z = points.at(it).z();
+      }
     }
   
     return ret;
@@ -536,7 +658,7 @@ namespace balloon_planner
     const double x = origin.x();
     const double y = origin.y();
     const double z = origin.z();
-    pos_t ret(0, 0, 0);
+    pos_t ret(x, y, z);
     if (abs(a) > eps)
       ret(0) = -(y*b + z*c + d)/a;
     else if (abs(b) > eps)
@@ -593,6 +715,7 @@ void BalloonPlanner::onInit()
   pl.load_param("rheiv/fitting_period", m_rheiv_fitting_period);
   pl.load_param("rheiv/min_points", m_rheiv_min_pts);
   pl.load_param("rheiv/max_points", m_rheiv_max_pts);
+  pl.load_param("rheiv/visualization_size", m_rheiv_visualization_size);
 
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
@@ -631,7 +754,8 @@ void BalloonPlanner::onInit()
   m_pub_chosen_balloon = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("filtered_position", 1);
   m_pub_used_meas = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("detection_used", 1);
   m_pub_pred_path = nh.advertise<nav_msgs::Path>("predicted_path", 1);
-  m_pub_plane_dbg = nh.advertise<visualization_msgs::Marker>("fitted_plane", 1);
+  m_pub_plane_dbg = nh.advertise<visualization_msgs::MarkerArray>("fitted_plane", 1);
+  m_pub_used_pts = nh.advertise<sensor_msgs::PointCloud2>("fit_points", 1);
 
   //}
 
@@ -656,7 +780,7 @@ void BalloonPlanner::onInit()
     m_rheiv_theta_valid = false;
   }
 
-  reset_current_estimate();
+  reset_ukf_estimate();
   m_is_initialized = true;
 
   /* timers  //{ */
@@ -676,7 +800,7 @@ void BalloonPlanner::onInit()
   
   bool BalloonPlanner::reset_chosen_callback(balloon_planner::ResetChosen::Request& req, balloon_planner::ResetChosen::Response& resp)
   {
-    reset_current_estimate();
+    reset_ukf_estimate();
     resp.message = "Current chosen balloon was reset.";
     resp.success = true;
     return true;

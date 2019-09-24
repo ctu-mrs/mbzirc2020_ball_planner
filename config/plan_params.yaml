@@ -4,15 +4,15 @@ gating_distance: 20.0 # meters
 max_time_since_update: 2.0 # seconds
 min_updates_to_confirm: 10
 ukf:
-  prediction_horizon: 40.0 # seconds
+  prediction_horizon: 8.0 # seconds
   prediction_step: 1.0 # seconds
-  prediction_period: 0.1 # seconds
+  prediction_period: 0.05 # seconds
 
 process_std:
   position: 0.5
   yaw: 0.01
   speed: 0.01
-  curvature: 0.1
+  curvature: 5.0
   quaternion: 0.00001
 
 init_std:
@@ -29,3 +29,4 @@ rheiv:
   fitting_period: 0.1 # seconds
   min_points: 100
   max_points: 500
+  visualization_size: 5 # metres
