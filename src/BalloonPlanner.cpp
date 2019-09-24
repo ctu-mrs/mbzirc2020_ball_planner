@@ -499,7 +499,7 @@ namespace balloon_planner
   
     for (const auto& pred : predictions)
     {
-      const quat_t yaw_quat(Eigen::AngleAxisd(pred(ukf::x_yaw), Eigen::Vector3d::UnitX()));
+      const quat_t yaw_quat(Eigen::AngleAxisd(pred(ukf::x_yaw), Eigen::Vector3d::UnitZ()));
       const quat_t ori_quat = plane_quat*yaw_quat;
       geometry_msgs::PoseStamped pose;
       pose.header = header;
