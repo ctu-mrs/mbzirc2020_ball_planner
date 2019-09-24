@@ -207,6 +207,7 @@ namespace balloon_planner
       cov_t rotate_covariance(const cov_t& covariance, const cov_t& rotation);
       bool point_valid(const pos_t& pt);
       quat_t plane_orientation(const theta_t& plane_theta);
+      double plane_angle(const theta_t& plane1, const theta_t& plane2);
       pos_t plane_origin(const theta_t& plane_theta, const pos_t& origin);
 
       /* UKF related methods //{ */

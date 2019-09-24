@@ -107,7 +107,9 @@ namespace balloon_planner
       // Fitting might throw an exception, so we better try/catch it!
       try
       {
-        const rheiv::theta_t theta = fit_plane(rheiv_pts, rheiv_covs);
+        rheiv::theta_t theta = fit_plane(rheiv_pts, rheiv_covs);
+        if (plane_angle(theta, m_rheiv_theta) > M_PI)
+          theta = -theta;
         
         // If everything went well, save the results and print a nice message
         {
@@ -644,6 +646,15 @@ namespace balloon_planner
   {
     const quat_t ret = mrs_lib::quaternion_between({0, 0, 1}, plane_theta.block<3, 1>(0, 0));
     return ret;
+  }
+  //}
+
+  /* plane_angle() method //{ */
+  double BalloonPlanner::plane_angle(const theta_t& plane1, const theta_t& plane2)
+  {
+    const auto normal1 = plane1.block<3, 1>(0, 0).normalized();
+    const auto normal2 = plane2.block<3, 1>(0, 0).normalized();
+    return mrs_lib::angle_between(normal1, normal2);
   }
   //}
 
