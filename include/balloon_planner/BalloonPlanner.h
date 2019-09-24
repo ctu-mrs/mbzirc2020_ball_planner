@@ -20,13 +20,13 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <visualization_msgs/Marker.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 
 // MRS stuff
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/subscribe_handler.h>
 #include <mrs_lib/DynamicReconfigureMgr.h>
-#include <mrs_lib/threadsaved.h>
 #include <mrs_lib/geometry_utils.h>
 
 // Boost
@@ -82,6 +82,7 @@ namespace balloon_planner
       const std::string m_node_name;
       void main_loop([[maybe_unused]] const ros::TimerEvent& evt);
       void rheiv_loop(const ros::TimerEvent& evt);
+      void prediction_loop(const ros::TimerEvent& evt);
 
     private:
       std::unique_ptr<mrs_lib::Profiler> m_profiler_ptr;
@@ -93,17 +94,21 @@ namespace balloon_planner
       // --------------------------------------------------------------
 
       /* Parameters, loaded from ROS //{ */
+      std::string m_world_frame;
+      std::string m_uav_frame_id;
+
       double m_rheiv_fitting_period;
       int m_rheiv_min_pts;
       int m_rheiv_max_pts;
 
-      std::string m_world_frame;
-      std::string m_uav_frame_id;
       double m_gating_distance;
       double m_max_time_since_update;
       double m_min_updates_to_confirm;
       double m_z_bounds_min;
       double m_z_bounds_max;
+
+      double m_prediction_horizon;
+      double m_prediction_step;
 
       UKF::x_t m_process_std;
       UKF::x_t m_init_std;
@@ -118,28 +123,52 @@ namespace balloon_planner
 
       ros::Publisher m_pub_chosen_balloon;
       ros::Publisher m_pub_used_meas;
+      ros::Publisher m_pub_pred_path;
       ros::Publisher m_pub_plane_dbg;
 
       ros::ServiceServer m_reset_chosen_server;
 
       ros::Timer m_main_loop_timer;
       ros::Timer m_rheiv_loop_timer;
+      ros::Timer m_prediction_loop_timer;
       //}
 
       RHEIV m_rheiv;
       std::mutex m_rheiv_pts_covs_mtx;
       boost::circular_buffer<pos_t> m_rheiv_pts;
       boost::circular_buffer<cov_t> m_rheiv_covs;
+      void add_rheiv_data(const pos_t& pos, const cov_t& cov)
+      {
+        std::scoped_lock lck(m_rheiv_pts_covs_mtx);
+        m_rheiv_pts.push_back(pos);
+        m_rheiv_covs.push_back(cov);
+      };
+      std::tuple<boost::circular_buffer<pos_t>, boost::circular_buffer<cov_t>> get_rheiv_data()
+      {
+        std::scoped_lock lck(m_rheiv_pts_covs_mtx);
+        return {m_rheiv_pts, m_rheiv_covs};
+      };
 
       std::mutex m_rheiv_theta_mtx;
       bool m_rheiv_theta_valid;
       rheiv::theta_t m_rheiv_theta;
+      std::tuple<bool, rheiv::theta_t> get_rheiv_status()
+      {
+        std::scoped_lock lck(m_rheiv_theta_mtx);
+        return {m_rheiv_theta_valid, m_rheiv_theta};
+      };
 
       UKF m_ukf;
-      bool m_current_estimate_exists;
-      UKF::statecov_t m_current_estimate;
-      ros::Time m_current_estimate_last_update;
-      int m_current_estimate_n_updates;
+      std::mutex m_ukf_estimate_mtx;
+      bool m_ukf_estimate_exists;
+      UKF::statecov_t m_ukf_estimate;
+      ros::Time m_ukf_last_update;
+      int m_ukf_n_updates;
+      std::tuple<bool, UKF::statecov_t, ros::Time, int> get_ukf_status()
+      {
+        std::scoped_lock lck(m_ukf_estimate_mtx);
+        return {m_ukf_estimate_exists, m_ukf_estimate, m_ukf_last_update, m_ukf_n_updates};
+      };
 
     private:
 
@@ -168,12 +197,13 @@ namespace balloon_planner
       cov_t rotate_covariance(const cov_t& covariance, const cov_t& rotation);
       bool point_valid(const pos_t& pt);
       quat_t plane_orientation(const theta_t& plane_theta);
-      pos_t plane_origin(const theta_t& plane_theta);
+      pos_t plane_origin(const theta_t& plane_theta, const pos_t& origin);
 
       /* UKF related methods //{ */
       bool update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta);
       bool init_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta);
       void reset_current_estimate();
+      std::vector<pos_t> predict_path(const UKF::statecov_t initial_statecov, const double prediction_horizon, const double prediction_step);
       //}
 
       rheiv::theta_t fit_plane(const boost::circular_buffer<pos_t>& points, const boost::circular_buffer<cov_t>& covs);
@@ -181,7 +211,8 @@ namespace balloon_planner
       pos_t get_pos(const UKF::x_t& x);
       pos_cov_t get_pos_cov(const UKF::statecov_t& statecov);
       geometry_msgs::PoseWithCovarianceStamped to_output_message(const pos_cov_t& estimate, const std_msgs::Header& header);
-      visualization_msgs::Marker to_output_message(const theta_t& plane_theta, const std_msgs::Header& header);
+      visualization_msgs::Marker to_output_message(const theta_t& plane_theta, const std_msgs::Header& header, const pos_t& origin);
+      nav_msgs::Path to_output_message(const std::vector<pos_t>& predictions, const std_msgs::Header& header);
       pos_t get_cur_mav_pos();
       bool find_closest_to(const std::vector<pos_cov_t>& measurements, const pos_t& to_position, pos_cov_t& closest_out, bool use_gating = false);
       bool find_closest(const std::vector<pos_cov_t>& measurements, pos_cov_t& closest_out);

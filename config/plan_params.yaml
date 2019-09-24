@@ -3,6 +3,10 @@ world_frame: "local_origin"
 gating_distance: 20.0 # meters
 max_time_since_update: 2.0 # seconds
 min_updates_to_confirm: 10
+ukf:
+  prediction_horizon: 40.0 # seconds
+  prediction_step: 1.0 # seconds
+  prediction_period: 0.1 # seconds
 
 process_std:
   position: 0.5

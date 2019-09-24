@@ -17,32 +17,20 @@ namespace balloon_planner
         ROS_INFO("[%s]: Processing %lu new detections vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", m_node_name.c_str(), balloons.poses.size());
         
         // transform the message to usable measurement format
-        auto measurements = message_to_positions(balloons);
+        std::vector<pos_cov_t> measurements = message_to_positions(balloons);
 
-        {
-          std::scoped_lock lck(m_rheiv_pts_covs_mtx);
-          for (const auto& meas : measurements)
-          {
-            m_rheiv_pts.push_back(meas.pos);
-            m_rheiv_covs.push_back(meas.cov);
-          }
-        }
+        for (const auto& meas : measurements)
+          add_rheiv_data(meas.pos, meas.cov);
 
         // copy the latest plane fit
-        bool plane_theta_valid;
-        theta_t plane_theta;
-        {
-          std::scoped_lock lck(m_rheiv_theta_mtx);
-          plane_theta_valid = m_rheiv_theta_valid;
-          plane_theta = m_rheiv_theta;
-        }
+        const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
 
         if (plane_theta_valid && m_pub_used_meas.getNumSubscribers() > 0)
         {
           std_msgs::Header header;
           header.frame_id = m_world_frame;
           header.stamp = ros::Time::now();
-          m_pub_plane_dbg.publish(to_output_message(plane_theta, header));
+          m_pub_plane_dbg.publish(to_output_message(plane_theta, header, get_pos(m_ukf_estimate.x)));
         }
 
         // check if we have all data that is needed
@@ -51,20 +39,20 @@ namespace balloon_planner
           // if all data is available, try to either initialize or update the UKF
           pos_cov_t used_meas;
           bool used_meas_valid = false;
-          if (m_current_estimate_exists)
+          if (m_ukf_estimate_exists)
             used_meas_valid = update_current_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
           else
             used_meas_valid = init_current_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
 
-          /* publish the used measurement for debugging and visualisation purposes //{ */
           if (used_meas_valid)
           {
+            /* publish the used measurement for debugging and visualisation purposes //{ */
             std_msgs::Header header;
             header.frame_id = m_world_frame;
-            header.stamp = m_current_estimate_last_update;
+            header.stamp = balloons.header.stamp;
             m_pub_used_meas.publish(to_output_message(used_meas, header));
+            //}
           }
-          //}
         } else
         {
           if (!plane_theta_valid)
@@ -85,38 +73,32 @@ namespace balloon_planner
         ROS_INFO_THROTTLE(1.0, "[%s]: Empty detections message received", m_node_name.c_str());
       }
     }
-    if ((ros::Time::now() - m_current_estimate_last_update).toSec() >= m_max_time_since_update)
+    if ((ros::Time::now() - m_ukf_last_update).toSec() >= m_max_time_since_update)
     {
       reset_current_estimate();
     }
 
-    if (m_current_estimate_exists && m_current_estimate_n_updates > m_min_updates_to_confirm)
+    if (m_ukf_estimate_exists && m_ukf_n_updates > m_min_updates_to_confirm)
     {
       std_msgs::Header header;
       header.frame_id = m_world_frame;
-      header.stamp = m_current_estimate_last_update;
-      const auto cur_pos_cov = get_pos_cov(m_current_estimate);
+      header.stamp = m_ukf_last_update;
+      const auto cur_pos_cov = get_pos_cov(m_ukf_estimate);
       m_pub_chosen_balloon.publish(to_output_message(cur_pos_cov, header));
-      ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
+      ROS_INFO_THROTTLE(1.0, "[%s]: Current chosen balloon position: [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_ukf_estimate.x.x(), m_ukf_estimate.x.y(), m_ukf_estimate.x.z());
     }
   }
   //}
 
   /* rheiv_loop() method //{ */
-  void BalloonPlanner::rheiv_loop(const ros::TimerEvent& evt)
+  void BalloonPlanner::rheiv_loop([[maybe_unused]] const ros::TimerEvent& evt)
   {
     // threadsafe copy the data to be fitted with the plane
-    boost::circular_buffer<pos_t> rheiv_pts;
-    boost::circular_buffer<cov_t> rheiv_covs;
-    {
-      std::scoped_lock lck(m_rheiv_pts_covs_mtx);
-      rheiv_pts = m_rheiv_pts;
-      rheiv_covs = m_rheiv_covs;
-    }
+    const auto [rheiv_pts, rheiv_covs] = get_rheiv_data();
 
-    ros::Duration d_cbk;
     if (rheiv_pts.size() > (size_t)m_rheiv_min_pts)
     {
+      ros::Time fit_time_start = ros::Time::now();
       // Fitting might throw an exception, so we better try/catch it!
       try
       {
@@ -128,29 +110,41 @@ namespace balloon_planner
           m_rheiv_theta_valid = true;
           m_rheiv_theta = theta;
         }
-        d_cbk = ros::Time::now() - evt.current_real;
-        ROS_INFO_STREAM("[RHEIV]: Fitted new plane estimate: " << theta.transpose() << ", in " << d_cbk.toSec() << "s.");
+        ROS_INFO_STREAM("[RHEIV]: Fitted new plane estimate: [" << theta.transpose() << "], in " << (ros::Time::now() - fit_time_start).toSec() << "s.");
       } catch (const mrs_lib::eigenvector_exception& ex)
       {
         // Fitting threw exception, notify the user.
-        d_cbk = ros::Time::now() - evt.current_real;
-        ROS_WARN_STREAM("[RHEIV]: Could not fit plane: '" << ex.what() << "' (took " << d_cbk.toSec() << "s).");
+        ROS_WARN_STREAM("[RHEIV]: Could not fit plane: '" << ex.what() << "' (took " << (ros::Time::now() - fit_time_start).toSec() << "s).");
       }
     } else
     {
       // Still waiting for enough points to fit the plane through.
       ROS_WARN_STREAM("[RHEIV]: Not enough points to fit plane (" << rheiv_pts.size() << "/ " << m_rheiv_min_pts << ").");
-      d_cbk = ros::Time::now() - evt.current_real;
     }
   
-    // start the fitting process again after the desired delay
-    ros::Duration d_remaining = ros::Duration(m_rheiv_fitting_period) - d_cbk;
-    if (d_remaining < ros::Duration(1e-6))
-      d_remaining = ros::Duration(1e-6);
-    ROS_WARN_STREAM("[RHEIV]: Next fit in " << d_remaining.toSec() << "s.");
-    m_rheiv_loop_timer.stop();
-    m_rheiv_loop_timer.setPeriod(d_remaining);
-    m_rheiv_loop_timer.start();
+    /* // start the fitting process again after the desired delay */
+    /* ros::Duration d_remaining = ros::Duration(m_rheiv_fitting_period) - d_cbk; */
+    /* if (d_remaining < ros::Duration(0)) */
+    /*   d_remaining = ros::Duration(0); */
+    /* ROS_WARN_STREAM("[RHEIV]: Next fit in " << d_remaining.toSec() << "s."); */
+    /* m_rheiv_loop_timer.stop(); */
+    /* m_rheiv_loop_timer.setPeriod(d_remaining); */
+    /* m_rheiv_loop_timer.start(); */
+  }
+  //}
+
+  /* prediction_loop() method //{ */
+  void BalloonPlanner::prediction_loop([[maybe_unused]] const ros::TimerEvent& evt)
+  {
+    [[maybe_unused]] const auto [ukf_estimate_exists, ukf_estimate, ukf_last_update, _1] = get_ukf_status();
+    if (ukf_estimate_exists)
+    {
+      const auto predictions = predict_path(ukf_estimate, m_prediction_horizon, m_prediction_step);
+      std_msgs::Header header;
+      header.frame_id = m_world_frame;
+      header.stamp = ukf_last_update;
+      m_pub_pred_path.publish(to_output_message(predictions, header));
+    }
   }
   //}
 
@@ -161,22 +155,40 @@ namespace balloon_planner
   /* update_current_estimate() method //{ */
   bool BalloonPlanner::update_current_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta)
   {
+    UKF::statecov_t ukf_estimate;
+    ros::Time ukf_last_update;
+    int ukf_n_updates;
+    {
+      std::scoped_lock lck(m_ukf_estimate_mtx);
+      ukf_estimate = m_ukf_estimate;
+      ukf_last_update = m_ukf_last_update;
+      ukf_n_updates = m_ukf_n_updates;
+    }
+
     pos_cov_t closest_meas;
-    const auto cur_pos = get_pos(m_current_estimate.x);
+    const auto cur_pos = get_pos(ukf_estimate.x);
     bool meas_valid = find_closest_to(measurements, cur_pos, closest_meas, true);
+
     if (meas_valid)
     {
       ROS_INFO("[%s]: Updating current estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
-      const double dt = (stamp - m_current_estimate_last_update).toSec();
+      const double dt = (stamp - ukf_last_update).toSec();
       const UKF::Q_t Q = dt*m_process_std.asDiagonal();
-      m_current_estimate = m_ukf.predict(m_current_estimate, UKF::u_t(), Q, dt);
-      m_current_estimate = m_ukf.correct(m_current_estimate, closest_meas.pos, closest_meas.cov);
-      m_current_estimate_last_update = stamp;
-      m_current_estimate_n_updates++;
+      ukf_estimate = m_ukf.predict(ukf_estimate, UKF::u_t(), Q, dt);
+      ukf_estimate = m_ukf.correct(ukf_estimate, closest_meas.pos, closest_meas.cov);
+      ukf_last_update = stamp;
+      ukf_n_updates++;
       used_meas = closest_meas;
+
+      {
+        std::scoped_lock lck(m_ukf_estimate_mtx);
+        m_ukf_estimate = ukf_estimate;
+        m_ukf_last_update = ukf_last_update;
+        m_ukf_n_updates = ukf_n_updates;
+      }
     } else
     {
-      ROS_INFO("[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), m_current_estimate.x.x(), m_current_estimate.x.y(), m_current_estimate.x.z());
+      ROS_INFO("[%s]: No point is close enough to [%.2f, %.2f, %.2f]", m_node_name.c_str(), ukf_estimate.x.x(), ukf_estimate.x.y(), ukf_estimate.x.z());
     }
     return meas_valid;
   }
@@ -191,20 +203,20 @@ namespace balloon_planner
     {
       ROS_INFO("[%s]: Initializing estimate using point [%.2f, %.2f, %.2f]", m_node_name.c_str(), closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
 
-      m_current_estimate.x = UKF::x_t::Zero();
-      m_current_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
+      m_ukf_estimate.x = UKF::x_t::Zero();
+      m_ukf_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
 
       const quat_t plane_quat = plane_orientation(plane_theta);
-      m_current_estimate.x(ukf::x_qw) = plane_quat.w();
-      m_current_estimate.x(ukf::x_qx) = plane_quat.x();
-      m_current_estimate.x(ukf::x_qy) = plane_quat.y();
-      m_current_estimate.x(ukf::x_qz) = plane_quat.z();
+      m_ukf_estimate.x(ukf::x_qw) = plane_quat.w();
+      m_ukf_estimate.x(ukf::x_qx) = plane_quat.x();
+      m_ukf_estimate.x(ukf::x_qy) = plane_quat.y();
+      m_ukf_estimate.x(ukf::x_qz) = plane_quat.z();
 
-      m_current_estimate.P = m_init_std.asDiagonal();
-      m_current_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
-      m_current_estimate_exists = true;
-      m_current_estimate_last_update = stamp;
-      m_current_estimate_n_updates = 1;
+      m_ukf_estimate.P = m_init_std.asDiagonal();
+      m_ukf_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
+      m_ukf_estimate_exists = true;
+      m_ukf_last_update = stamp;
+      m_ukf_n_updates = 1;
       used_meas = closest_meas;
     } else
     {
@@ -217,10 +229,31 @@ namespace balloon_planner
   /* reset_current_estimate() method //{ */
   void BalloonPlanner::reset_current_estimate()
   {
-    m_current_estimate_exists = false;
-    m_current_estimate_last_update = ros::Time::now();
-    m_current_estimate_n_updates = 0;
+    m_ukf_estimate_exists = false;
+    m_ukf_last_update = ros::Time::now();
+    m_ukf_n_updates = 0;
     ROS_INFO("[%s]: Current chosen balloon ==RESET==.", m_node_name.c_str());
+  }
+  //}
+
+  /* predict_path() method //{ */
+  std::vector<pos_t> BalloonPlanner::predict_path(const UKF::statecov_t initial_statecov, const double prediction_horizon, const double prediction_step)
+  {
+    assert(prediction_step > 0.0);
+    assert(prediction_horizon > 0.0);
+    const int n_pts = round(prediction_horizon / prediction_step);
+    const UKF::Q_t Q = prediction_step*m_process_std.asDiagonal();
+  
+    UKF::statecov_t statecov = initial_statecov;
+    std::vector<pos_t> ret;
+    ret.reserve(n_pts);
+    ret.push_back(get_pos(statecov.x));
+    for (int it = 0; it < n_pts; it++)
+    {
+      statecov = m_ukf.predict(statecov, UKF::u_t(), Q, prediction_step);
+      ret.push_back(get_pos(statecov.x));
+    }
+    return ret;
   }
   //}
 
@@ -289,12 +322,12 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  visualization_msgs::Marker BalloonPlanner::to_output_message(const theta_t& plane_theta, const std_msgs::Header& header)
+  visualization_msgs::Marker BalloonPlanner::to_output_message(const theta_t& plane_theta, const std_msgs::Header& header, const pos_t& origin)
   {
     visualization_msgs::Marker ret;
   
     const auto quat = plane_orientation(plane_theta);
-    const auto pos = plane_origin(plane_theta);
+    const auto pos = plane_origin(plane_theta, origin);
 
     ret.header = header;
 
@@ -321,7 +354,7 @@ namespace balloon_planner
     ret.color.g = 0.0;
     ret.color.b = 1.0;
 
-    const double size = 1000;
+    const double size = 20;
     geometry_msgs::Point ptA; ptA.x = size; ptA.y = size; ptA.z = 0;
     geometry_msgs::Point ptB; ptB.x = -size; ptB.y = size; ptB.z = 0;
     geometry_msgs::Point ptC; ptC.x = -size; ptC.y = -size; ptC.z = 0;
@@ -337,6 +370,31 @@ namespace balloon_planner
     ret.points.push_back(ptC);
     ret.points.push_back(ptD);
 
+    return ret;
+  }
+  //}
+
+  /* to_output_message() method //{ */
+  nav_msgs::Path BalloonPlanner::to_output_message(const std::vector<pos_t>& predictions, const std_msgs::Header& header)
+  {
+    nav_msgs::Path ret;
+    ret.header = header;
+    ret.poses.reserve(predictions.size());
+  
+    for (const auto& pred : predictions)
+    {
+      geometry_msgs::PoseStamped pose;
+      pose.header = header;
+      pose.pose.position.x = pred.x();
+      pose.pose.position.y = pred.y();
+      pose.pose.position.z = pred.z();
+      pose.pose.orientation.x = 0.0;
+      pose.pose.orientation.y = 0.0;
+      pose.pose.orientation.z = 0.0;
+      pose.pose.orientation.w = 1.0;
+      ret.poses.push_back(pose);
+    }
+  
     return ret;
   }
   //}
@@ -468,20 +526,23 @@ namespace balloon_planner
   //}
 
   /* plane_origin() method //{ */
-  pos_t BalloonPlanner::plane_origin(const theta_t& plane_theta)
+  pos_t BalloonPlanner::plane_origin(const theta_t& plane_theta, const pos_t& origin)
   {
     const static double eps = 1e-9;
     const double a = plane_theta(0);
     const double b = plane_theta(1);
     const double c = plane_theta(2);
     const double d = plane_theta(3);
+    const double x = origin.x();
+    const double y = origin.y();
+    const double z = origin.z();
     pos_t ret(0, 0, 0);
     if (abs(a) > eps)
-      ret(0) = -d/a;
+      ret(0) = -(y*b + z*c + d)/a;
     else if (abs(b) > eps)
-      ret(1) = -d/b;
+      ret(1) = -(x*a + z*c + d)/b;
     else if (abs(c) > eps)
-      ret(2) = -d/c;
+      ret(2) = -(x*a + y*b + d)/c;
     return ret;
   }
   //}
@@ -494,6 +555,8 @@ namespace balloon_planner
     m_gating_distance = cfg.gating_distance;
     m_max_time_since_update = cfg.max_time_since_update;
     m_min_updates_to_confirm = cfg.min_updates_to_confirm;
+
+    m_prediction_horizon = cfg.ukf__prediction_horizon;
 
     m_process_std(ukf::x_x) = m_process_std(ukf::x_y) = m_process_std(ukf::x_z) = cfg.process_std__position;
     m_process_std(ukf::x_yaw) = cfg.process_std__yaw;
@@ -526,7 +589,7 @@ void BalloonPlanner::onInit()
   ROS_INFO("[%s]: LOADING STATIC PARAMETERS", m_node_name.c_str());
   mrs_lib::ParamLoader pl(nh, m_node_name);
 
-  double planning_period = pl.load_param2<double>("planning_period");
+  const double planning_period = pl.load_param2<double>("planning_period");
   pl.load_param("rheiv/fitting_period", m_rheiv_fitting_period);
   pl.load_param("rheiv/min_points", m_rheiv_min_pts);
   pl.load_param("rheiv/max_points", m_rheiv_max_pts);
@@ -536,6 +599,8 @@ void BalloonPlanner::onInit()
   pl.load_param("gating_distance", m_gating_distance);
   pl.load_param("max_time_since_update", m_max_time_since_update);
   pl.load_param("min_updates_to_confirm", m_min_updates_to_confirm);
+  pl.load_param("ukf/prediction_step", m_prediction_step);
+  const double prediction_period = pl.load_param2<double>("ukf/prediction_period");
 
   if (!pl.loaded_successfully())
   {
@@ -563,8 +628,9 @@ void BalloonPlanner::onInit()
 
   /* publishers //{ */
 
-  m_pub_chosen_balloon = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("balloon_chosen_out", 1);
-  m_pub_used_meas = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("balloon_detection_used", 1);
+  m_pub_chosen_balloon = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("filtered_position", 1);
+  m_pub_used_meas = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("detection_used", 1);
+  m_pub_pred_path = nh.advertise<nav_msgs::Path>("predicted_path", 1);
   m_pub_plane_dbg = nh.advertise<visualization_msgs::Marker>("fitted_plane", 1);
 
   //}
@@ -596,7 +662,8 @@ void BalloonPlanner::onInit()
   /* timers  //{ */
 
   m_main_loop_timer = nh.createTimer(ros::Duration(planning_period), &BalloonPlanner::main_loop, this);
-  m_rheiv_loop_timer = nh.createTimer(ros::Duration(m_rheiv_fitting_period), &BalloonPlanner::rheiv_loop, this, true /*oneshot*/);
+  m_rheiv_loop_timer = nh.createTimer(ros::Duration(m_rheiv_fitting_period), &BalloonPlanner::rheiv_loop, this);
+  m_prediction_loop_timer = nh.createTimer(ros::Duration(prediction_period), &BalloonPlanner::prediction_loop, this);
 
   //}
 
