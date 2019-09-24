@@ -25,12 +25,15 @@ namespace balloon_planner
         // copy the latest plane fit
         const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
 
-        if (plane_theta_valid && m_pub_plane_dbg.getNumSubscribers() > 0)
+        if (plane_theta_valid && (m_pub_plane_dbg.getNumSubscribers() > 0 || m_pub_plane_dbg2.getNumSubscribers()))
         {
           std_msgs::Header header;
           header.frame_id = m_world_frame;
           header.stamp = ros::Time::now();
-          m_pub_plane_dbg.publish(to_output_message(plane_theta, header, get_pos(m_ukf_estimate.x)));
+          if (m_pub_plane_dbg.getNumSubscribers())
+            m_pub_plane_dbg.publish(to_output_message(plane_theta, header, get_pos(m_ukf_estimate.x)));
+          if (m_pub_plane_dbg2.getNumSubscribers())
+            m_pub_plane_dbg2.publish(to_output_message2(plane_theta, header, get_pos(m_ukf_estimate.x)));
         }
 
         // check if we have all data that is needed
@@ -86,7 +89,9 @@ namespace balloon_planner
         std_msgs::Header header;
         header.frame_id = m_world_frame;
         header.stamp = ros::Time::now();
-        const auto cur_estimate = predict_ukf_estimate(header.stamp, plane_theta);
+        auto cur_estimate = predict_ukf_estimate(header.stamp, plane_theta);
+        Eigen::IOFormat short_fmt(3);
+        cur_estimate.x.format(short_fmt);
         const auto cur_pos_cov = get_pos_cov(cur_estimate);
         m_pub_chosen_balloon.publish(to_output_message(cur_pos_cov, header));
         ROS_WARN_STREAM_THROTTLE(MSG_THROTTLE, "[UKF]: Current UKF prediction:" << std::endl << "[\tx\t\ty\t\tz\t\tyaw\t\tspd\t\tcur\t\tqw\t\tqx\t\tqy\t\tqz\t]" << std::endl << "[" << cur_estimate.x.transpose() << "]");
@@ -108,8 +113,9 @@ namespace balloon_planner
       try
       {
         rheiv::theta_t theta = fit_plane(rheiv_pts, rheiv_covs);
-        if (plane_angle(theta, m_rheiv_theta) > M_PI)
+        if (abs(plane_angle(-theta, m_rheiv_theta)) < abs(plane_angle(theta, m_rheiv_theta)))
           theta = -theta;
+        double angle_diff = plane_angle(theta, m_rheiv_theta);
         
         // If everything went well, save the results and print a nice message
         {
@@ -117,7 +123,7 @@ namespace balloon_planner
           m_rheiv_theta_valid = true;
           m_rheiv_theta = theta;
         }
-        ROS_INFO_STREAM_THROTTLE(MSG_THROTTLE, "[RHEIV]: Fitted new plane estimate to " << rheiv_pts.size() << " points: [" << theta.transpose() << "], in " << (ros::Time::now() - fit_time_start).toSec() << "s.");
+        ROS_INFO_STREAM_THROTTLE(MSG_THROTTLE, "[RHEIV]: Fitted new plane estimate to " << rheiv_pts.size() << " points in " << (ros::Time::now() - fit_time_start).toSec() << "s (angle diff: " << angle_diff << "):" << std::endl << "[" << theta.transpose() << "]");
       } catch (const mrs_lib::eigenvector_exception& ex)
       {
         // Fitting threw exception, notify the user.
@@ -364,8 +370,8 @@ namespace balloon_planner
   {
     visualization_msgs::MarkerArray ret;
   
-    const auto quat = plane_orientation(plane_theta);
     const auto pos = plane_origin(plane_theta, origin);
+    const auto quat = plane_orientation(plane_theta);
 
     const double size = m_rheiv_visualization_size;
     geometry_msgs::Point ptA; ptA.x = size; ptA.y = size; ptA.z = 0;
@@ -457,6 +463,27 @@ namespace balloon_planner
       ret.markers.push_back(plane_marker);
     }
     //}
+
+    return ret;
+  }
+  //}
+
+  /* to_output_message() method //{ */
+  geometry_msgs::PoseStamped BalloonPlanner::to_output_message2(const theta_t& plane_theta, const std_msgs::Header& header, const pos_t& origin)
+  {
+    geometry_msgs::PoseStamped ret;
+  
+    const auto pos = plane_origin(plane_theta, origin);
+    const auto quat = plane_orientation(plane_theta);
+
+    ret.header = header;
+    ret.pose.position.x = pos.x();
+    ret.pose.position.y = pos.y();
+    ret.pose.position.z = pos.z();
+    ret.pose.orientation.w = quat.w();
+    ret.pose.orientation.x = quat.x();
+    ret.pose.orientation.y = quat.y();
+    ret.pose.orientation.z = quat.z();
 
     return ret;
   }
@@ -766,6 +793,7 @@ void BalloonPlanner::onInit()
   m_pub_used_meas = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("detection_used", 1);
   m_pub_pred_path = nh.advertise<nav_msgs::Path>("predicted_path", 1);
   m_pub_plane_dbg = nh.advertise<visualization_msgs::MarkerArray>("fitted_plane", 1);
+  m_pub_plane_dbg2 = nh.advertise<geometry_msgs::PoseStamped>("fitted_plane_pose", 1);
   m_pub_used_pts = nh.advertise<sensor_msgs::PointCloud2>("fit_points", 1);
 
   //}
