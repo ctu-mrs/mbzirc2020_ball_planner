@@ -5,3 +5,7 @@ path_offset: 0.8 # metres
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
+
+z_bounds:
+  min: 0.0
+  max: 20.0

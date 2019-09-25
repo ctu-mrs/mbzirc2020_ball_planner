@@ -19,10 +19,13 @@
       <rosparam file="$(find balloon_planner)/config/plan_params.yaml" command="load" />
 
       <!-- Subscribers -->
-      <remap from="~balloon_detections" to="object_detect/detected_objects" />
+      <remap from="~ball_predicted_path" to="balloon_filter/predicted_path" />
+      <remap from="~ball_fitted_plane" to="balloon_filter/fitted_plane" />
 
       <!-- Publishers -->
-      <remap from="~balloon_chosen_out" to="~balloon_chosen_out" />
+      <remap from="~commanded_trajectory" to="~commanded_trajectory" />
+      <!-- <remap from="~commanded_trajectory" to="control_manager/mpc_tracker/set_trajectory" /> -->
+      <remap from="~debug_trajectory" to="~debug_trajectory" />
 
     </node>
 
