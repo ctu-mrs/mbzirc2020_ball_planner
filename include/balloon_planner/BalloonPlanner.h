@@ -106,6 +106,8 @@ namespace balloon_planner
       ros::Timer m_main_loop_timer;
       //}
 
+      size_t m_max_pts;
+
     private:
 
       // --------------------------------------------------------------
@@ -135,6 +137,8 @@ namespace balloon_planner
       std::optional<std::tuple<vec3_t, ros::Time>> find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
       traj_t sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt);
       traj_t sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const ros::Duration& dur, const double dt);
+      traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
+      traj_t orient_trajectory_yaw(const traj_t& traj, const path_t& to_path);
 
       void load_dynparams(drcfg_t cfg);
 
