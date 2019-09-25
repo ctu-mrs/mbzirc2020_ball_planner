@@ -5,8 +5,8 @@ namespace balloon_planner
   namespace ukf
   {
       /* constexpr int kf_n_states = 10; */
-    constexpr int n_states = 10;
-    constexpr int n_inputs = 0;
+    constexpr int n_states = 6;
+    constexpr int n_inputs = 4;
     constexpr int n_measurements = 3;
     using UKF = mrs_lib::UKF<n_states, n_inputs, n_measurements>;
 
@@ -25,10 +25,15 @@ namespace balloon_planner
       x_yaw,   // yaw of the MAV in the eight-plane
       x_s,     // the ball speed
       x_c,     // curvature of the MAV trajectory in the eight-plane
-      x_qw,    // w element of quaterion, defining rotation from world frame to the eight-plane frame
-      x_qx,    // x element of quaterion, defining rotation from world frame to the eight-plane frame
-      x_qy,    // y element of quaterion, defining rotation from world frame to the eight-plane frame
-      x_qz,    // z element of quaterion, defining rotation from world frame to the eight-plane frame
+    };
+
+    // indices of the input interpretations
+    enum
+    {
+      u_qw = 0,// w element of quaterion, defining rotation from world frame to the eight-plane frame
+      u_qx,    // x element of quaterion, defining rotation from world frame to the eight-plane frame
+      u_qy,    // y element of quaterion, defining rotation from world frame to the eight-plane frame
+      u_qz,    // z element of quaterion, defining rotation from world frame to the eight-plane frame
     };
 
     // indices of the measurement interpretations

@@ -27,7 +27,7 @@ namespace balloon_planner
       return (T(0) < val) - (val < T(0));
     }
 
-    UKF::x_t tra_model_f(const UKF::x_t& in, [[maybe_unused]] const UKF::u_t& u, const double dt)
+    UKF::x_t tra_model_f(const UKF::x_t& in, const UKF::u_t& u, const double dt)
     {
       x_t out;
 
@@ -36,7 +36,7 @@ namespace balloon_planner
       const double speed = std::max(in(x_s), 0.0);
       const double curv = in(x_c);
       // reference for curvature: https://web.ma.utexas.edu/users/m408m/Display13-4-3.shtml
-      const Quat quat = Quat(in(x_qw), in(x_qx), in(x_qy), in(x_qz)).normalized();
+      const Quat quat = Quat(u(u_qw), u(u_qx), u(u_qy), u(u_qz)).normalized();
       const Vec3 tang(cos(yaw), sin(yaw), 0.0);
       const Vec3 norm(cos(yaw + M_PI_2), sin(yaw + M_PI_2), 0.0);
       const Vec3 vel_tang = speed*tang;
@@ -58,10 +58,6 @@ namespace balloon_planner
       out(x_yaw) = n_yaw;
       out(x_s) = n_speed;
       out(x_c) = n_curv;
-      out(x_qw) = n_quat.w();
-      out(x_qx) = n_quat.x();
-      out(x_qy) = n_quat.y();
-      out(x_qz) = n_quat.z();
 
       return out;
     }

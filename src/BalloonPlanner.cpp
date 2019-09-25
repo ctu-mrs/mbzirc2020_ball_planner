@@ -45,7 +45,7 @@ namespace balloon_planner
           if (m_ukf_estimate_exists)
             used_meas_valid = update_ukf_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
           else
-            used_meas_valid = init_ukf_estimate(measurements, balloons.header.stamp, used_meas, plane_theta);
+            used_meas_valid = init_ukf_estimate(measurements, balloons.header.stamp, used_meas);
 
           if (used_meas_valid)
           {
@@ -160,7 +160,7 @@ namespace balloon_planner
     const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
     if (ukf_estimate_exists && ukf_n_updates > m_min_updates_to_confirm && plane_theta_valid)
     {
-      const auto predictions = predict_states(ukf_estimate, ukf_last_update, m_prediction_horizon, m_prediction_step);
+      const auto predictions = predict_states(ukf_estimate, ukf_last_update, plane_theta, m_prediction_horizon, m_prediction_step);
       std_msgs::Header header;
       header.frame_id = m_world_frame;
       header.stamp = ukf_last_update;
@@ -179,14 +179,10 @@ namespace balloon_planner
     const double dt = (to_stamp - m_ukf_last_update).toSec();
     const UKF::Q_t Q = dt*m_process_std.asDiagonal();
   
-    const quat_t plane_quat = plane_orientation(plane_theta);
+    const UKF::u_t u = plane_theta_to_ukf_u(plane_theta);
     auto ukf_estimate = m_ukf_estimate;
-    ukf_estimate.x(ukf::x_qw) = plane_quat.w();
-    ukf_estimate.x(ukf::x_qx) = plane_quat.x();
-    ukf_estimate.x(ukf::x_qy) = plane_quat.y();
-    ukf_estimate.x(ukf::x_qz) = plane_quat.z();
   
-    const auto ret = m_ukf.predict(ukf_estimate, UKF::u_t(), Q, dt);
+    const auto ret = m_ukf.predict(ukf_estimate, u, Q, dt);
     return ret;
   }
   //}
@@ -204,15 +200,10 @@ namespace balloon_planner
     {
       ROS_INFO("[UKF]: Updating current estimate using point [%.2f, %.2f, %.2f]", closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
       const double dt = (stamp - ukf_last_update).toSec();
+      const UKF::u_t u = plane_theta_to_ukf_u(plane_theta);
       const UKF::Q_t Q = dt*m_process_std.asDiagonal();
 
-      const quat_t plane_quat = plane_orientation(plane_theta);
-      ukf_estimate.x(ukf::x_qw) = plane_quat.w();
-      ukf_estimate.x(ukf::x_qx) = plane_quat.x();
-      ukf_estimate.x(ukf::x_qy) = plane_quat.y();
-      ukf_estimate.x(ukf::x_qz) = plane_quat.z();
-
-      ukf_estimate = m_ukf.predict(ukf_estimate, UKF::u_t(), Q, dt);
+      ukf_estimate = m_ukf.predict(ukf_estimate, u, Q, dt);
       ukf_estimate = m_ukf.correct(ukf_estimate, closest_meas.pos, closest_meas.cov);
       ukf_last_update = stamp;
       ukf_n_updates++;
@@ -235,13 +226,12 @@ namespace balloon_planner
   //}
 
   /* init_ukf_estimate() method //{ */
-  bool BalloonPlanner::init_ukf_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas, const theta_t& plane_theta)
+  bool BalloonPlanner::init_ukf_estimate(const std::vector<pos_cov_t>& measurements, const ros::Time& stamp, pos_cov_t& used_meas)
   {
     pos_cov_t closest_meas;
     bool meas_valid = find_closest(measurements, closest_meas);
     if (meas_valid)
     {
-      const quat_t plane_quat = plane_orientation(plane_theta);
       ROS_INFO("[UKF]: Initializing estimate using point [%.2f, %.2f, %.2f]", closest_meas.pos.x(), closest_meas.pos.y(), closest_meas.pos.z());
 
       {
@@ -249,11 +239,6 @@ namespace balloon_planner
 
         m_ukf_estimate.x = UKF::x_t::Zero();
         m_ukf_estimate.x.block<3, 1>(0, 0) = closest_meas.pos;
-
-        m_ukf_estimate.x(ukf::x_qw) = plane_quat.w();
-        m_ukf_estimate.x(ukf::x_qx) = plane_quat.x();
-        m_ukf_estimate.x(ukf::x_qy) = plane_quat.y();
-        m_ukf_estimate.x(ukf::x_qz) = plane_quat.z();
 
         m_ukf_estimate.P = m_init_std.asDiagonal();
         m_ukf_estimate.P.block<3, 3>(0, 0) = closest_meas.cov;
@@ -281,11 +266,12 @@ namespace balloon_planner
   //}
 
   /* predict_states() method //{ */
-  std::vector<std::pair<UKF::x_t, ros::Time>> BalloonPlanner::predict_states(const UKF::statecov_t initial_statecov, const ros::Time& initial_timestamp, const double prediction_horizon, const double prediction_step)
+  std::vector<std::pair<UKF::x_t, ros::Time>> BalloonPlanner::predict_states(const UKF::statecov_t initial_statecov, const ros::Time& initial_timestamp, const theta_t& plane_theta, const double prediction_horizon, const double prediction_step)
   {
     assert(prediction_step > 0.0);
     assert(prediction_horizon > 0.0);
     const int n_pts = round(prediction_horizon / prediction_step);
+    const UKF::u_t u = plane_theta_to_ukf_u(plane_theta);
     const UKF::Q_t Q = prediction_step*m_process_std.asDiagonal();
   
     UKF::statecov_t statecov = initial_statecov;
@@ -295,7 +281,7 @@ namespace balloon_planner
     ret.push_back({statecov.x, timestamp});
     for (int it = 0; it < n_pts; it++)
     {
-      statecov = m_ukf.predict(statecov, UKF::u_t(), Q, prediction_step);
+      statecov = m_ukf.predict(statecov, u, Q, prediction_step);
       timestamp += ros::Duration(prediction_step);
       ret.push_back({statecov.x, timestamp});
     }
@@ -712,6 +698,19 @@ namespace balloon_planner
   }
   //}
 
+  /* plane_theta_to_ukf_u() method //{ */
+  UKF::u_t BalloonPlanner::plane_theta_to_ukf_u(const theta_t& plane_theta)
+  {
+    const quat_t quat = plane_orientation(plane_theta);
+    UKF::u_t ret;
+    ret(ukf::u_qw) = quat.w();
+    ret(ukf::u_qx) = quat.x();
+    ret(ukf::u_qy) = quat.y();
+    ret(ukf::u_qz) = quat.z();
+    return ret;
+  }
+  //}
+
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
@@ -727,12 +726,10 @@ namespace balloon_planner
     m_process_std(ukf::x_yaw) = cfg.process_std__yaw;
     m_process_std(ukf::x_s) = cfg.process_std__speed;
     m_process_std(ukf::x_c) = cfg.process_std__curvature;
-    m_process_std(ukf::x_qw) = m_process_std(ukf::x_qx) = m_process_std(ukf::x_qy) = m_process_std(ukf::x_qz) = cfg.process_std__quaternion;
 
     m_init_std(ukf::x_yaw) = cfg.init_std__yaw;
     m_init_std(ukf::x_s) = cfg.init_std__speed;
     m_init_std(ukf::x_c) = cfg.init_std__curvature;
-    m_init_std(ukf::x_qw) = m_init_std(ukf::x_qx) = m_init_std(ukf::x_qy) = m_init_std(ukf::x_qz) = cfg.init_std__quaternion;
   }
   //}
 
