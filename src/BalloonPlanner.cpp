@@ -26,7 +26,7 @@ namespace balloon_planner
         return;
       }
 
-      const auto offset_vector = calc_path_offset_vector(plane_params);
+      const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
       const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
 
       const auto [approach_pt, approach_stamp] = find_approach_pt(cur_pos, cur_t, tgt_path, m_approach_speed);
@@ -59,6 +59,7 @@ namespace balloon_planner
       result_traj.header.frame_id = m_world_frame;
       result_traj.header.stamp = cur_t;
       result_traj.use_yaw = true;
+      result_traj.fly_now = true;
       assert(result_traj.points.size() == m_max_pts);
 
       m_pub_cmd_traj.publish(result_traj);
@@ -90,10 +91,18 @@ namespace balloon_planner
   }
   //}
 
-  /* calc_path_offset_vector() method //{ */
-  vec3_t BalloonPlanner::calc_path_offset_vector(const plane_t& plane_params, const double tolerance)
+  template <typename T> int sign(T val)
   {
-    const vec3_t normal(plane_params.normal.x, plane_params.normal.y, plane_params.normal.z);
+    return (T(0) < val) - (val < T(0));
+  }
+
+  /* calc_path_offset_vector() method //{ */
+  vec3_t BalloonPlanner::calc_path_offset_vector(const plane_t& plane_params, const vec3_t& towards_pt, const double tolerance)
+  {
+    const Eigen::Vector4d plane_theta(plane_params.normal.x, plane_params.normal.y, plane_params.normal.z, plane_params.offset);
+    const Eigen::Vector4d pt_tmp(towards_pt.x(), towards_pt.y(), towards_pt.z(), 1.0);
+    const double orientation = plane_theta.transpose() * pt_tmp;
+    const vec3_t normal = sign(orientation)*vec3_t(plane_params.normal.x, plane_params.normal.y, plane_params.normal.z);
     vec3_t ret(normal.x(), normal.y(), 0.0);
     if (ret.norm() < tolerance)
       ret = vec3_t(-1.0, 0.0, 0.0); // if the plane is horizontal, offset in x by default
@@ -170,7 +179,7 @@ namespace balloon_planner
   
         if (approach_time > t1 && approach_time < t2 && (!closest_time_set || approach_time < closest_time))
         {
-          closest_pt = (line_pt2 - line_pt1)*cur_param;
+          closest_pt = line_pt1 + (line_pt2 - line_pt1)*cur_param;
           closest_time = approach_time;
           closest_time_set = true;
         }

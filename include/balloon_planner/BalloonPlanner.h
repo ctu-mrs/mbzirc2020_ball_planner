@@ -134,7 +134,7 @@ namespace balloon_planner
       //}
 
       std::optional<vec3_t> get_current_position();
-      vec3_t calc_path_offset_vector(const plane_t& plane_params, const double tolerance = 1e-9);
+      vec3_t calc_path_offset_vector(const plane_t& plane_params, const vec3_t& towards_pt, const double tolerance = 1e-9);
       path_t offset_path(const path_t& path, const vec3_t& vector, const double offset);
       std::tuple<vec3_t, ros::Time> find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
       traj_t sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt);
