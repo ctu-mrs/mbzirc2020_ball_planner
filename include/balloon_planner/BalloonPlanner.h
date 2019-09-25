@@ -54,6 +54,11 @@ namespace balloon_planner
   using drcfg_t = balloon_planner::PlanningParamsConfig;
   using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
 
+  using vec3_t = Eigen::Vector3d;
+  using path_t = nav_msgs::Path;
+  using plane_t = balloon_filter::Plane;
+  using traj_t = mrs_msgs::TrackerTrajectory;
+
   /* //{ class BalloonPlanner */
 
   class BalloonPlanner : public nodelet::Nodelet
@@ -80,6 +85,12 @@ namespace balloon_planner
       /* Parameters, loaded from ROS //{ */
       std::string m_world_frame;
       std::string m_uav_frame_id;
+
+      double m_path_offset;
+      double m_approach_speed;
+
+      double m_trajectory_sampling_dt;
+      double m_trajectory_horizon;
 
       //}
 
@@ -117,6 +128,13 @@ namespace balloon_planner
         return true;
       }
       //}
+
+      std::optional<vec3_t> get_current_position();
+      vec3_t calc_path_offset_vector(const plane_t& plane_params, const double tolerance = 1e-9);
+      path_t offset_path(const path_t& path, const vec3_t& vector, const double offset);
+      std::optional<std::tuple<vec3_t, ros::Time>> find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
+      traj_t sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt);
+      traj_t sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const ros::Duration& dur, const double dt);
 
       void load_dynparams(drcfg_t cfg);
 
