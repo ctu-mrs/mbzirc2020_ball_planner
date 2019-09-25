@@ -12,7 +12,7 @@ process_std:
   position: 0.5
   yaw: 0.01
   speed: 0.01
-  curvature: 5.0
+  curvature: 10.0
   quaternion: 0.00001
 
 init_std:

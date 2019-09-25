@@ -160,7 +160,7 @@ namespace balloon_planner
     const auto [plane_theta_valid, plane_theta] = get_rheiv_status();
     if (ukf_estimate_exists && ukf_n_updates > m_min_updates_to_confirm && plane_theta_valid)
     {
-      const auto predictions = predict_states(ukf_estimate, m_prediction_horizon, m_prediction_step);
+      const auto predictions = predict_states(ukf_estimate, ukf_last_update, m_prediction_horizon, m_prediction_step);
       std_msgs::Header header;
       header.frame_id = m_world_frame;
       header.stamp = ukf_last_update;
@@ -281,7 +281,7 @@ namespace balloon_planner
   //}
 
   /* predict_states() method //{ */
-  std::vector<UKF::x_t> BalloonPlanner::predict_states(const UKF::statecov_t initial_statecov, const double prediction_horizon, const double prediction_step)
+  std::vector<std::pair<UKF::x_t, ros::Time>> BalloonPlanner::predict_states(const UKF::statecov_t initial_statecov, const ros::Time& initial_timestamp, const double prediction_horizon, const double prediction_step)
   {
     assert(prediction_step > 0.0);
     assert(prediction_horizon > 0.0);
@@ -289,13 +289,15 @@ namespace balloon_planner
     const UKF::Q_t Q = prediction_step*m_process_std.asDiagonal();
   
     UKF::statecov_t statecov = initial_statecov;
-    std::vector<UKF::x_t> ret;
+    ros::Time timestamp = initial_timestamp;
+    std::vector<std::pair<UKF::x_t, ros::Time>> ret;
     ret.reserve(n_pts);
-    ret.push_back(statecov.x);
+    ret.push_back({statecov.x, timestamp});
     for (int it = 0; it < n_pts; it++)
     {
       statecov = m_ukf.predict(statecov, UKF::u_t(), Q, prediction_step);
-      ret.push_back(statecov.x);
+      timestamp += ros::Duration(prediction_step);
+      ret.push_back({statecov.x, timestamp});
     }
     return ret;
   }
@@ -490,7 +492,7 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  nav_msgs::Path BalloonPlanner::to_output_message(const std::vector<UKF::x_t>& predictions, const std_msgs::Header& header, const theta_t& plane_theta)
+  nav_msgs::Path BalloonPlanner::to_output_message(const std::vector<std::pair<UKF::x_t, ros::Time>>& predictions, const std_msgs::Header& header, const theta_t& plane_theta)
   {
     nav_msgs::Path ret;
     ret.header = header;
@@ -499,13 +501,16 @@ namespace balloon_planner
   
     for (const auto& pred : predictions)
     {
-      const quat_t yaw_quat(Eigen::AngleAxisd(pred(ukf::x_yaw), Eigen::Vector3d::UnitZ()));
+      const UKF::x_t& state = pred.first;
+      const ros::Time& timestamp = pred.second;
+      const quat_t yaw_quat(Eigen::AngleAxisd(state(ukf::x_yaw), Eigen::Vector3d::UnitZ()));
       const quat_t ori_quat = plane_quat*yaw_quat;
       geometry_msgs::PoseStamped pose;
       pose.header = header;
-      pose.pose.position.x = pred.x();
-      pose.pose.position.y = pred.y();
-      pose.pose.position.z = pred.z();
+      pose.header.stamp = timestamp;
+      pose.pose.position.x = state.x();
+      pose.pose.position.y = state.y();
+      pose.pose.position.z = state.z();
       pose.pose.orientation.x = ori_quat.x();
       pose.pose.orientation.y = ori_quat.y();
       pose.pose.orientation.z = ori_quat.z();
