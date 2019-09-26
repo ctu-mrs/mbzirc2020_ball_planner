@@ -23,8 +23,8 @@
       <remap from="~ball_fitted_plane" to="balloon_filter/fitted_plane" />
 
       <!-- Publishers -->
-      <!-- <remap from="~commanded_trajectory" to="~commanded_trajectory" /> -->
-      <remap from="~commanded_trajectory" to="control_manager/mpc_tracker/set_trajectory" />
+      <remap from="~commanded_trajectory" to="~commanded_trajectory" />
+      <!-- <remap from="~commanded_trajectory" to="control_manager/mpc_tracker/set_trajectory" /> -->
       <remap from="~debug_trajectory" to="~debug_trajectory" />
 
     </node>

@@ -29,30 +29,36 @@ namespace balloon_planner
       const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
       const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
 
-      const auto [approach_pt, approach_stamp] = find_approach_pt(cur_pos, cur_t, tgt_path, m_approach_speed);
+      const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, m_approach_speed);
+      const ros::Time approach_time = cur_t + ros::Duration((approach_pt - cur_pos).norm()/m_approach_speed);
       /* if (!approach_res.has_value()) */
       /* { */
         /* ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Failed to find a viable approach point to the predicted trajectory!"); */
         /* return; */
       /* } */
       /* const auto [approach_pt, approach_stamp] = approach_res.value(); */
-      const auto approach_traj = sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
+      const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
 
-      const auto approach_duration = approach_stamp - cur_t;
-      const auto remaining_traj_dur = ros::Duration(m_trajectory_horizon) - approach_duration;
+      const ros::Duration dt_dur(m_trajectory_sampling_dt);
+      const auto approach_traj_end_time = cur_t + approach_traj_duration;
+      ROS_WARN_STREAM("ideal approach time2: " << approach_time);
+      ROS_WARN_STREAM("actual approach time: " << approach_traj_end_time);
+      if (approach_time  - approach_traj_end_time > dt_dur)
+        ROS_ERROR_STREAM("Difference between approach times is too damn high!: " << approach_traj_end_time - approach_time);
+      else if (approach_time  - approach_traj_end_time < ros::Duration(0))
+        ROS_ERROR_STREAM("Difference between approach times is less than zero!: " << approach_traj_end_time - approach_time);
+      const auto follow_traj_start_time = approach_traj_end_time + dt_dur;
+      const size_t pts_remaining = m_max_pts - approach_traj.points.size();
       std::optional<traj_t> follow_traj_res = std::nullopt;
-      if (remaining_traj_dur > ros::Duration(0.0))
+      if (pts_remaining > 0)
       {
-        const ros::Duration dt_dur(m_trajectory_sampling_dt);
-        const auto approach_traj_end_time = cur_t + dt_dur*double(approach_traj.points.size());
-        const auto follow_traj_start_time = approach_traj_end_time + dt_dur;
-        const size_t pts_remaining = m_max_pts - approach_traj.points.size();
-
-        follow_traj_res = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
-        ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << remaining_traj_dur.toSec() << "s, " << follow_traj_res.value_or(traj_t()).points.size() << "pts");
+        const auto [follow_traj, follow_traj_duration] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
+        follow_traj_res = follow_traj;
+        ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
+        ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur);
       } else
       {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach trajectory takes longer than trajectory horizon (" << approach_duration.toSec() << "s > " << m_trajectory_horizon << "s).");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach trajectory takes longer than trajectory horizon (" << approach_traj_duration.toSec() << "s > " << m_trajectory_horizon << "s).");
       }
       const auto joined_traj = join_trajectories(approach_traj, follow_traj_res.value_or(traj_t()));
       traj_t result_traj = orient_trajectory_yaw(joined_traj, pred_path);
@@ -132,7 +138,7 @@ namespace balloon_planner
   {
     const vec3_t line_dir = (line_pt2 - line_pt1).normalized();
     const vec3_t diff_vec = to_pt - line_pt1;
-    const double param = line_dir.dot(diff_vec);
+    const double param = diff_vec.dot(line_dir);
     return param;
   }
   //}
@@ -152,8 +158,15 @@ namespace balloon_planner
   }
   //}
 
+  ros::Duration time_to_fly(const vec3_t& from_pt, const vec3_t& to_pt, const double speed)
+  {
+    const double dist = (from_pt - to_pt).norm();
+    ros::Duration dur(dist/speed);
+    return dur;
+  }
+
   /* find_approach_pt() method //{ */
-  std::tuple<vec3_t, ros::Time> BalloonPlanner::find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed)
+  vec3_t  BalloonPlanner::find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed)
   {
     assert(!to_path.poses.empty());
     vec3_t closest_pt;
@@ -173,13 +186,13 @@ namespace balloon_planner
         assert(cur_param <= 1.0);
         const ros::Time t1 = prev_pose.header.stamp;
         const ros::Time t2 = pose.header.stamp;
-        const vec3_t approach_pt = (line_pt2-line_pt1)*cur_param;
-        const ros::Duration approach_dur((approach_pt - from_pt).norm()/speed);
+        const vec3_t approach_pt = line_pt1 + (line_pt2-line_pt1)*cur_param;
+        const ros::Duration approach_dur = time_to_fly(from_pt, approach_pt, speed);
         const ros::Time approach_time = from_time + approach_dur;
   
         if (approach_time > t1 && approach_time < t2 && (!closest_time_set || approach_time < closest_time))
         {
-          closest_pt = line_pt1 + (line_pt2 - line_pt1)*cur_param;
+          closest_pt = approach_pt;
           closest_time = approach_time;
           closest_time_set = true;
         }
@@ -192,23 +205,25 @@ namespace balloon_planner
     {
       const auto last_pt = to_path.poses.back();
       closest_pt = vec3_t(last_pt.pose.position.x, last_pt.pose.position.y, last_pt.pose.position.z);
-      const ros::Duration approach_dur((closest_pt - from_pt).norm()/speed);
+      const ros::Duration approach_dur = time_to_fly(from_pt, closest_pt, speed);
       closest_time = from_time + approach_dur;
     }
+    ROS_WARN_STREAM("ideal approach time: " << closest_time);
   
-    return {closest_pt, closest_time};
+    return closest_pt;
   }
   //}
 
   /* sample_trajectory_between_pts() method //{ */
-  traj_t BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt)
+  std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt)
   {
     assert(speed > 0.0);
     assert(dt > 0.0);
   
     const vec3_t diff_vec = to_pt - from_pt;
     const double dist = diff_vec.norm();
-    const size_t n_pts = std::floor(dist/(speed*dt));
+    const size_t n_pts = std::min(size_t(std::floor(dist/(speed*dt))), m_max_pts);
+    const ros::Duration traj_dur((n_pts-1) * dt);
     const vec3_t d_vec = speed*dt*diff_vec/dist;
   
     traj_t ret;
@@ -222,12 +237,12 @@ namespace balloon_planner
       tr_pt.z = cur_pt.z();
       ret.points.push_back(tr_pt);
     }
-    return ret;
+    return {ret, traj_dur};
   }
   //}
 
   /* sample_trajectory_from_path() method //{ */
-  traj_t BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
+  std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
   {
     assert(!path.poses.empty());
     /* const size_t n_pts = std::min(m_max_pts, size_t(std::floor(dur.toSec() / dt))); */
@@ -267,8 +282,9 @@ namespace balloon_planner
   
       cur_time += dt_dur;
     }
+    const ros::Duration traj_dur((n_pts-1) * dt);
 
-    return ret;
+    return {ret, traj_dur};
   }
   //}
 
