@@ -2,6 +2,21 @@
 
 namespace balloon_planner
 {
+  ros::Duration time_to_fly(const vec3_t& from_pt, const vec3_t& to_pt, const double speed)
+  {
+    const double dist = (from_pt - to_pt).norm();
+    ros::Duration dur(dist/speed);
+    return dur;
+  }
+
+  void add_point_to_trajectory(const vec3_t pt, traj_t& traj)
+  {
+    mrs_msgs::TrackerPoint tr_pt;
+    tr_pt.x = pt.x();
+    tr_pt.y = pt.y();
+    tr_pt.z = pt.z();
+    traj.points.push_back(tr_pt);
+  }
 
   /* main_loop() method //{ */
   void BalloonPlanner::main_loop([[maybe_unused]] const ros::TimerEvent& evt)
@@ -30,7 +45,16 @@ namespace balloon_planner
       const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
 
       const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, m_approach_speed);
-      const ros::Time approach_time = cur_t + ros::Duration((approach_pt - cur_pos).norm()/m_approach_speed);
+      const ros::Time approach_time = cur_t + time_to_fly(cur_pos, approach_pt, m_approach_speed);
+      {
+        geometry_msgs::PointStamped msg;
+        msg.header.frame_id = m_world_frame;
+        msg.header.stamp = approach_time;
+        msg.point.x = approach_pt.x();
+        msg.point.y = approach_pt.y();
+        msg.point.z = approach_pt.z();
+        m_pub_dbg_approach_pt.publish(msg);
+      }
       /* if (!approach_res.has_value()) */
       /* { */
         /* ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Failed to find a viable approach point to the predicted trajectory!"); */
@@ -43,10 +67,7 @@ namespace balloon_planner
       const auto approach_traj_end_time = cur_t + approach_traj_duration;
       ROS_WARN_STREAM("ideal approach time2: " << approach_time);
       ROS_WARN_STREAM("actual approach time: " << approach_traj_end_time);
-      if (approach_time  - approach_traj_end_time > dt_dur)
-        ROS_ERROR_STREAM("Difference between approach times is too damn high!: " << approach_traj_end_time - approach_time);
-      else if (approach_time  - approach_traj_end_time < ros::Duration(0))
-        ROS_ERROR_STREAM("Difference between approach times is less than zero!: " << approach_traj_end_time - approach_time);
+
       const auto follow_traj_start_time = approach_traj_end_time + dt_dur;
       const size_t pts_remaining = m_max_pts - approach_traj.points.size();
       std::optional<traj_t> follow_traj_res = std::nullopt;
@@ -158,13 +179,6 @@ namespace balloon_planner
   }
   //}
 
-  ros::Duration time_to_fly(const vec3_t& from_pt, const vec3_t& to_pt, const double speed)
-  {
-    const double dist = (from_pt - to_pt).norm();
-    ros::Duration dur(dist/speed);
-    return dur;
-  }
-
   /* find_approach_pt() method //{ */
   vec3_t  BalloonPlanner::find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed)
   {
@@ -222,20 +236,18 @@ namespace balloon_planner
   
     const vec3_t diff_vec = to_pt - from_pt;
     const double dist = diff_vec.norm();
-    const size_t n_pts = std::min(size_t(std::floor(dist/(speed*dt))), m_max_pts);
+    const size_t n_pts = std::min(size_t(std::ceil(dist/(speed*dt)))+1, m_max_pts);
     const ros::Duration traj_dur((n_pts-1) * dt);
-    const vec3_t d_vec = speed*dt*diff_vec/dist;
+    const double speed_scaled = dist/traj_dur.toSec();
+    ROS_INFO_STREAM("[]: scaled speed : " << speed_scaled << "m/s (orig: " << speed << "m/s)");
+    const vec3_t d_vec = speed_scaled*dt*diff_vec/dist;
   
     traj_t ret;
     ret.points.reserve(n_pts);
     for (size_t it = 0; it < n_pts; it++)
     {
       const auto cur_pt = from_pt + it*d_vec;
-      mrs_msgs::TrackerPoint tr_pt;
-      tr_pt.x = cur_pt.x();
-      tr_pt.y = cur_pt.y();
-      tr_pt.z = cur_pt.z();
-      ret.points.push_back(tr_pt);
+      add_point_to_trajectory(cur_pt, ret);
     }
     return {ret, traj_dur};
   }
@@ -251,14 +263,14 @@ namespace balloon_planner
     traj_t ret;
     ret.points.reserve(n_pts);
   
-    ros::Time cur_time = start_stamp;
+    ros::Time cur_stamp = start_stamp;
     int prev_pose_it = 0;
     for (size_t it = 0; it < n_pts; it++)
     {
       geometry_msgs::PoseStamped prev_pose = path.poses.at(prev_pose_it);
       geometry_msgs::PoseStamped next_pose = path.poses.at(prev_pose_it+1);
       // Find prev_pose which is before start_stamp with cur_pose being after start_stamp and next after prev_pose
-      while (next_pose.header.stamp < cur_time)
+      while (next_pose.header.stamp < cur_stamp)
       {
         if (prev_pose_it >= (int)path.poses.size()-2)
         {
@@ -273,14 +285,10 @@ namespace balloon_planner
         next_pose = path.poses.at(next_pose_it);
       }
   
-      const auto cur_pt = linear_interpolation(cur_time, prev_pose, next_pose);
-      mrs_msgs::TrackerPoint tr_pt;
-      tr_pt.x = cur_pt.x();
-      tr_pt.y = cur_pt.y();
-      tr_pt.z = cur_pt.z();
-      ret.points.push_back(tr_pt);
+      const auto cur_pt = linear_interpolation(cur_stamp, prev_pose, next_pose);
+      add_point_to_trajectory(cur_pt, ret);
   
-      cur_time += dt_dur;
+      cur_stamp += dt_dur;
     }
     const ros::Duration traj_dur((n_pts-1) * dt);
 
@@ -393,6 +401,7 @@ void BalloonPlanner::onInit()
 
   m_pub_cmd_traj = nh.advertise<mrs_msgs::TrackerTrajectory>("commanded_trajectory", 1);
   m_pub_dbg_traj = nh.advertise<nav_msgs::Path>("debug_trajectory", 1);
+  m_pub_dbg_approach_pt = nh.advertise<geometry_msgs::PointStamped>("debug_approach_point", 1);
 
   //}
 

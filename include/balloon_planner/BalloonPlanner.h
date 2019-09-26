@@ -104,6 +104,7 @@ namespace balloon_planner
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
+      ros::Publisher m_pub_dbg_approach_pt;
 
       ros::Timer m_main_loop_timer;
       //}
