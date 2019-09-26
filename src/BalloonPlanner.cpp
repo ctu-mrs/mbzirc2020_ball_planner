@@ -61,8 +61,9 @@ namespace balloon_planner
         /* return; */
       /* } */
       /* const auto [approach_pt, approach_stamp] = approach_res.value(); */
-      const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
+      const auto [approach_traj, approach_traj_duration, dbg_path1] = sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
 
+      path_t dbg_path2;
       const ros::Duration dt_dur(m_trajectory_sampling_dt);
       const auto approach_traj_end_time = cur_t + approach_traj_duration;
       ROS_WARN_STREAM("ideal approach time2: " << approach_time);
@@ -73,8 +74,9 @@ namespace balloon_planner
       std::optional<traj_t> follow_traj_res = std::nullopt;
       if (pts_remaining > 0)
       {
-        const auto [follow_traj, follow_traj_duration] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
+        const auto [follow_traj, follow_traj_duration, dbg_path] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
         follow_traj_res = follow_traj;
+        dbg_path2 = dbg_path;
         ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
         ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur);
       } else
@@ -229,7 +231,7 @@ namespace balloon_planner
   //}
 
   /* sample_trajectory_between_pts() method //{ */
-  std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt)
+  std::tuple<traj_t, ros::Duration, path_t> BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt)
   {
     assert(speed > 0.0);
     assert(dt > 0.0);
@@ -248,13 +250,14 @@ namespace balloon_planner
     {
       const auto cur_pt = from_pt + it*d_vec;
       add_point_to_trajectory(cur_pt, ret);
+      add_point_to_path(cur_pt, cur_stamp, ret);
     }
     return {ret, traj_dur};
   }
   //}
 
   /* sample_trajectory_from_path() method //{ */
-  std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
+  std::tuple<traj_t, ros::Duration, path_t> BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
   {
     assert(!path.poses.empty());
     /* const size_t n_pts = std::min(m_max_pts, size_t(std::floor(dur.toSec() / dt))); */
