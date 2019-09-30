@@ -41,7 +41,7 @@
 // local includes
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_planner/ResetChosen.h>
-#include <balloon_filter/Plane.h>
+#include <balloon_filter/BallPrediction.h>
 #include <mrs_msgs/TrackerTrajectory.h>
 
 //}
@@ -88,7 +88,6 @@ namespace balloon_planner
       std::string m_uav_frame_id;
 
       double m_path_offset;
-      double m_approach_speed;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
@@ -99,12 +98,15 @@ namespace balloon_planner
       std::unique_ptr<drmgr_t> m_drmgr_ptr;
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-      mrs_lib::SubscribeHandlerPtr<nav_msgs::Path> m_sh_predicted_path;
-      mrs_lib::SubscribeHandlerPtr<balloon_filter::Plane> m_sh_fitted_plane;
+      mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
+      ros::Publisher m_pub_dbg_approach_traj;
+      ros::Publisher m_pub_dbg_follow_traj;
       ros::Publisher m_pub_dbg_approach_pt;
+      ros::Publisher m_pub_dbg_path_pose1;
+      ros::Publisher m_pub_dbg_path_pose2;
 
       ros::Timer m_main_loop_timer;
       //}
@@ -138,8 +140,8 @@ namespace balloon_planner
       vec3_t calc_path_offset_vector(const plane_t& plane_params, const vec3_t& towards_pt, const double tolerance = 1e-9);
       path_t offset_path(const path_t& path, const vec3_t& vector, const double offset);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
-      std::tuple<traj_t, ros::Duration, path_t> sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt);
-      std::tuple<traj_t, ros::Duration, path_t> sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
+      std::tuple<traj_t, ros::Duration> sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt);
+      std::tuple<traj_t, ros::Duration> sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
       traj_t orient_trajectory_yaw(const traj_t& traj, const path_t& to_path);
 

@@ -24,11 +24,14 @@ namespace balloon_planner
     load_dynparams(m_drmgr_ptr->config);
 
     auto cur_pos_res = get_current_position();
-    if (m_sh_predicted_path->new_data() && m_sh_fitted_plane->has_data() && cur_pos_res.has_value())
+    if (m_sh_ball_prediction->new_data() && cur_pos_res.has_value())
     {
       const vec3_t cur_pos = cur_pos_res.value();
-      const auto pred_path = *(m_sh_predicted_path->get_data());
-      const auto plane_params = *(m_sh_fitted_plane->get_data());
+      const auto ball_prediction = *(m_sh_ball_prediction->get_data());
+      const auto& pred_path = ball_prediction.predicted_path;
+      const auto& plane_params = ball_prediction.filter_state.fitted_plane;
+      const auto& ukf_state = ball_prediction.filter_state.ukf_state;
+      const auto& est_speed = ukf_state.speed;
       const auto cur_t = ros::Time::now();
       if (pred_path.poses.empty())
       {
@@ -44,39 +47,28 @@ namespace balloon_planner
       const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
       const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
 
-      const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, m_approach_speed);
-      const ros::Time approach_time = cur_t + time_to_fly(cur_pos, approach_pt, m_approach_speed);
+      const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, est_speed);
       {
         geometry_msgs::PointStamped msg;
         msg.header.frame_id = m_world_frame;
-        msg.header.stamp = approach_time;
+        msg.header.stamp = cur_t;
         msg.point.x = approach_pt.x();
         msg.point.y = approach_pt.y();
         msg.point.z = approach_pt.z();
         m_pub_dbg_approach_pt.publish(msg);
       }
-      /* if (!approach_res.has_value()) */
-      /* { */
-        /* ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Failed to find a viable approach point to the predicted trajectory!"); */
-        /* return; */
-      /* } */
-      /* const auto [approach_pt, approach_stamp] = approach_res.value(); */
-      const auto [approach_traj, approach_traj_duration, dbg_path1] = sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
+      const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, est_speed, m_trajectory_sampling_dt);
 
-      path_t dbg_path2;
       const ros::Duration dt_dur(m_trajectory_sampling_dt);
       const auto approach_traj_end_time = cur_t + approach_traj_duration;
-      ROS_WARN_STREAM("ideal approach time2: " << approach_time);
-      ROS_WARN_STREAM("actual approach time: " << approach_traj_end_time);
 
       const auto follow_traj_start_time = approach_traj_end_time + dt_dur;
       const size_t pts_remaining = m_max_pts - approach_traj.points.size();
       std::optional<traj_t> follow_traj_res = std::nullopt;
       if (pts_remaining > 0)
       {
-        const auto [follow_traj, follow_traj_duration, dbg_path] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
+        const auto [follow_traj, follow_traj_duration] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
         follow_traj_res = follow_traj;
-        dbg_path2 = dbg_path;
         ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
         ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur);
       } else
@@ -159,7 +151,7 @@ namespace balloon_planner
   /* find_closest_line_param() method //{ */
   double find_closest_line_param(const vec3_t& to_pt, const vec3_t& line_pt1, const vec3_t& line_pt2)
   {
-    const vec3_t line_dir = (line_pt2 - line_pt1).normalized();
+    const vec3_t line_dir = line_pt2 - line_pt1;
     const vec3_t diff_vec = to_pt - line_pt1;
     const double param = diff_vec.dot(line_dir);
     return param;
@@ -188,6 +180,8 @@ namespace balloon_planner
     vec3_t closest_pt;
     ros::Time closest_time;
     bool closest_time_set = false;
+    /* double closest_param = std::numeric_limits<double>::infinity(); */
+    /* double closest_param_unclamped = std::numeric_limits<double>::infinity(); */
   
     geometry_msgs::PoseStamped prev_pose;
     bool prev_pose_set = false;
@@ -197,7 +191,9 @@ namespace balloon_planner
       {
         const vec3_t line_pt1(prev_pose.pose.position.x, prev_pose.pose.position.y, prev_pose.pose.position.z);
         const vec3_t line_pt2(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z);
-        const auto cur_param = std::clamp(find_closest_line_param(from_pt, line_pt1, line_pt2), 0.0, 1.0);
+        const auto cur_param_unclamped = find_closest_line_param(from_pt, line_pt1, line_pt2);
+        /* ROS_WARN_STREAM("cur param (unclamped): " << cur_param_unclamped); */
+        const auto cur_param = std::clamp(cur_param_unclamped, 0.0, 1.0);
         assert(cur_param >= 0.0);
         assert(cur_param <= 1.0);
         const ros::Time t1 = prev_pose.header.stamp;
@@ -211,6 +207,8 @@ namespace balloon_planner
           closest_pt = approach_pt;
           closest_time = approach_time;
           closest_time_set = true;
+          /* closest_param = cur_param; */
+          /* closest_param_unclamped = cur_param_unclamped; */
         }
       }
       prev_pose = pose;
@@ -224,14 +222,16 @@ namespace balloon_planner
       const ros::Duration approach_dur = time_to_fly(from_pt, closest_pt, speed);
       closest_time = from_time + approach_dur;
     }
-    ROS_WARN_STREAM("ideal approach time: " << closest_time);
+    /* ROS_WARN_STREAM("closest param:" << closest_param); */
+    /* ROS_WARN_STREAM("closest param (unclamped): " << closest_param_unclamped); */
+    /* ROS_WARN_STREAM("ideal approach time: " << closest_time); */
   
     return closest_pt;
   }
   //}
 
   /* sample_trajectory_between_pts() method //{ */
-  std::tuple<traj_t, ros::Duration, path_t> BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt)
+  std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt)
   {
     assert(speed > 0.0);
     assert(dt > 0.0);
@@ -250,14 +250,19 @@ namespace balloon_planner
     {
       const auto cur_pt = from_pt + it*d_vec;
       add_point_to_trajectory(cur_pt, ret);
-      add_point_to_path(cur_pt, cur_stamp, ret);
+      /* add_point_to_path(cur_pt, cur_stamp, ret); */
     }
+
+    ret.header.frame_id = m_world_frame;
+    ret.header.stamp = ros::Time::now();
+    m_pub_dbg_approach_traj.publish(traj_to_path(ret, dt));
+
     return {ret, traj_dur};
   }
   //}
 
   /* sample_trajectory_from_path() method //{ */
-  std::tuple<traj_t, ros::Duration, path_t> BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
+  std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
   {
     assert(!path.poses.empty());
     /* const size_t n_pts = std::min(m_max_pts, size_t(std::floor(dur.toSec() / dt))); */
@@ -287,13 +292,27 @@ namespace balloon_planner
         const auto next_pose_it = prev_pose_it+1;
         next_pose = path.poses.at(next_pose_it);
       }
+
+      if (it == 0)
+      {
+        m_pub_dbg_path_pose1.publish(prev_pose);
+        m_pub_dbg_path_pose2.publish(next_pose);
   
+  /*       ROS_INFO_STREAM("cur_stamp: " << std::endl << cur_stamp); */
+  /*       ROS_INFO_STREAM("prev_pose: " << std::endl << prev_pose); */
+  /*       ROS_INFO_STREAM("next_pose: " << std::endl << next_pose); */
+      }
+
       const auto cur_pt = linear_interpolation(cur_stamp, prev_pose, next_pose);
       add_point_to_trajectory(cur_pt, ret);
   
       cur_stamp += dt_dur;
     }
     const ros::Duration traj_dur((n_pts-1) * dt);
+
+    ret.header.frame_id = m_world_frame;
+    ret.header.stamp = ros::Time::now();
+    m_pub_dbg_follow_traj.publish(traj_to_path(ret, dt));
 
     return {ret, traj_dur};
   }
@@ -371,7 +390,6 @@ void BalloonPlanner::onInit()
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
   pl.load_param("path_offset", m_path_offset);
-  pl.load_param("approach_speed", m_approach_speed);
 
   pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
   pl.load_param("trajectory/horizon", m_trajectory_horizon);
@@ -395,8 +413,8 @@ void BalloonPlanner::onInit()
   m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
   mrs_lib::SubscribeMgr smgr(nh);
   constexpr bool time_consistent = true;
-  m_sh_predicted_path = smgr.create_handler<nav_msgs::Path, time_consistent>("ball_predicted_path", ros::Duration(5.0));
-  m_sh_fitted_plane = smgr.create_handler<balloon_filter::Plane, time_consistent>("ball_fitted_plane", ros::Duration(5.0));
+  m_sh_ball_prediction = smgr.create_handler<balloon_filter::BallPrediction, time_consistent>("ball_prediction", ros::Duration(5.0));
+  /* m_sh_fitted_plane = smgr.create_handler<balloon_filter::Plane, time_consistent>("ball_fitted_plane", ros::Duration(5.0)); */
 
   //}
 
@@ -404,7 +422,11 @@ void BalloonPlanner::onInit()
 
   m_pub_cmd_traj = nh.advertise<mrs_msgs::TrackerTrajectory>("commanded_trajectory", 1);
   m_pub_dbg_traj = nh.advertise<nav_msgs::Path>("debug_trajectory", 1);
+  m_pub_dbg_approach_traj = nh.advertise<nav_msgs::Path>("debug_approach_trajectory", 1);
+  m_pub_dbg_follow_traj = nh.advertise<nav_msgs::Path>("debug_follow_trajectory", 1);
   m_pub_dbg_approach_pt = nh.advertise<geometry_msgs::PointStamped>("debug_approach_point", 1);
+  m_pub_dbg_path_pose1 = nh.advertise<geometry_msgs::PoseStamped>("debug_path_pose1", 1);
+  m_pub_dbg_path_pose2 = nh.advertise<geometry_msgs::PoseStamped>("debug_path_pose2", 1);
 
   //}
 
