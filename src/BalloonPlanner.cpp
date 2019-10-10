@@ -47,35 +47,39 @@ namespace balloon_planner
       const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
       const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
 
-      const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, est_speed);
-      {
-        geometry_msgs::PointStamped msg;
-        msg.header.frame_id = m_world_frame;
-        msg.header.stamp = cur_t;
-        msg.point.x = approach_pt.x();
-        msg.point.y = approach_pt.y();
-        msg.point.z = approach_pt.z();
-        m_pub_dbg_approach_pt.publish(msg);
-      }
-      const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, est_speed, m_trajectory_sampling_dt);
+      /* const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, est_speed); */
+      /* { */
+      /*   geometry_msgs::PointStamped msg; */
+      /*   msg.header.frame_id = m_world_frame; */
+      /*   msg.header.stamp = cur_t; */
+      /*   msg.point.x = approach_pt.x(); */
+      /*   msg.point.y = approach_pt.y(); */
+      /*   msg.point.z = approach_pt.z(); */
+      /*   m_pub_dbg_approach_pt.publish(msg); */
+      /* } */
+      /* const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, est_speed, m_trajectory_sampling_dt); */
 
-      const ros::Duration dt_dur(m_trajectory_sampling_dt);
-      const auto approach_traj_end_time = cur_t + approach_traj_duration;
+      /* const ros::Duration dt_dur(m_trajectory_sampling_dt); */
+      /* const auto approach_traj_end_time = cur_t + approach_traj_duration; */
 
-      const auto follow_traj_start_time = approach_traj_end_time + dt_dur;
-      const size_t pts_remaining = m_max_pts - approach_traj.points.size();
+      /* const auto follow_traj_start_time = approach_traj_end_time + dt_dur; */
+      /* const size_t pts_remaining = m_max_pts - approach_traj.points.size(); */
+
+      const auto follow_traj_start_time = ros::Time::now();
+      const size_t pts_remaining = m_max_pts;
       std::optional<traj_t> follow_traj_res = std::nullopt;
       if (pts_remaining > 0)
       {
         const auto [follow_traj, follow_traj_duration] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
         follow_traj_res = follow_traj;
-        ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
-        ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur);
+        /* ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts"); */
+        /* ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur); */
       } else
       {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach trajectory takes longer than trajectory horizon (" << approach_traj_duration.toSec() << "s > " << m_trajectory_horizon << "s).");
+        /* ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach trajectory takes longer than trajectory horizon (" << approach_traj_duration.toSec() << "s > " << m_trajectory_horizon << "s)."); */
       }
-      const auto joined_traj = join_trajectories(approach_traj, follow_traj_res.value_or(traj_t()));
+      /* const auto joined_traj = join_trajectories(approach_traj, follow_traj_res.value_or(traj_t())); */
+      const auto joined_traj = follow_traj_res.value_or(traj_t());
       traj_t result_traj = orient_trajectory_yaw(joined_traj, pred_path);
       result_traj.header.frame_id = m_world_frame;
       result_traj.header.stamp = cur_t;
@@ -162,9 +166,11 @@ namespace balloon_planner
   vec3_t linear_interpolation(const ros::Time& to_time, const geometry_msgs::PoseStamped& line_pt1, const geometry_msgs::PoseStamped& line_pt2)
   {
     const ros::Duration time_diff = line_pt2.header.stamp - line_pt1.header.stamp;
-    assert(!time_diff.isZero());
+    assert(!(time_diff.isZero() && to_time != line_pt1.header.stamp));
 
     const vec3_t pt1(line_pt1.pose.position.x, line_pt1.pose.position.y, line_pt1.pose.position.z);
+    if (time_diff.isZero())
+      return pt1;
     const vec3_t pt2(line_pt2.pose.position.x, line_pt2.pose.position.y, line_pt2.pose.position.z);
     const vec3_t pt_diff = pt2 - pt1;
     const ros::Duration desired_time_diff = to_time - line_pt1.header.stamp;
