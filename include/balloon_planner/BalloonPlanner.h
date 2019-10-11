@@ -60,6 +60,17 @@ namespace balloon_planner
   using plane_t = balloon_filter::Plane;
   using traj_t = mrs_msgs::TrackerTrajectory;
 
+  namespace state_enum
+  {
+    enum state_t
+    {
+      waiting_for_prediction,
+      following,
+      going_back,
+    };
+  }
+  using state_t = state_enum::state_t;
+
   /* //{ class BalloonPlanner */
 
   class BalloonPlanner : public nodelet::Nodelet
@@ -87,7 +98,7 @@ namespace balloon_planner
       std::string m_world_frame;
       std::string m_uav_frame_id;
 
-      double m_path_offset;
+      double m_approach_speed;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
@@ -114,6 +125,8 @@ namespace balloon_planner
       size_t m_max_pts;
 
     private:
+      state_t m_state;
+      double m_path_offset;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |

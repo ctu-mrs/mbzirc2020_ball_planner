@@ -23,73 +23,104 @@ namespace balloon_planner
   {
     load_dynparams(m_drmgr_ptr->config);
 
-    auto cur_pos_res = get_current_position();
-    if (m_sh_ball_prediction->new_data() && cur_pos_res.has_value())
+    switch (m_state)
     {
-      const vec3_t cur_pos = cur_pos_res.value();
-      const auto ball_prediction = *(m_sh_ball_prediction->get_data());
-      const auto& pred_path = ball_prediction.predicted_path;
-      const auto& plane_params = ball_prediction.filter_state.fitted_plane;
-      const auto& ukf_state = ball_prediction.filter_state.ukf_state;
-      const auto& est_speed = ukf_state.speed;
-      const auto cur_t = ros::Time::now();
-      if (pred_path.poses.empty())
-      {
-        ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Received empty predicted path, cannot plan trajectory!");
-        return;
-      }
-      if (pred_path.poses.back().header.stamp < cur_t)
-      {
-        ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest predicted pose is older that current time, cannot plan trajectory!");
-        return;
-      }
-
-      const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
-      const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
-
-      /* const auto approach_pt = find_approach_pt(cur_pos, cur_t, tgt_path, est_speed); */
-      /* { */
-      /*   geometry_msgs::PointStamped msg; */
-      /*   msg.header.frame_id = m_world_frame; */
-      /*   msg.header.stamp = cur_t; */
-      /*   msg.point.x = approach_pt.x(); */
-      /*   msg.point.y = approach_pt.y(); */
-      /*   msg.point.z = approach_pt.z(); */
-      /*   m_pub_dbg_approach_pt.publish(msg); */
-      /* } */
-      /* const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, est_speed, m_trajectory_sampling_dt); */
-
-      /* const ros::Duration dt_dur(m_trajectory_sampling_dt); */
-      /* const auto approach_traj_end_time = cur_t + approach_traj_duration; */
-
-      /* const auto follow_traj_start_time = approach_traj_end_time + dt_dur; */
-      /* const size_t pts_remaining = m_max_pts - approach_traj.points.size(); */
-
-      const auto follow_traj_start_time = ros::Time::now();
-      const size_t pts_remaining = m_max_pts;
-      std::optional<traj_t> follow_traj_res = std::nullopt;
-      if (pts_remaining > 0)
-      {
-        const auto [follow_traj, follow_traj_duration] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
-        follow_traj_res = follow_traj;
-        /* ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts"); */
-        /* ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur); */
-      } else
-      {
-        /* ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach trajectory takes longer than trajectory horizon (" << approach_traj_duration.toSec() << "s > " << m_trajectory_horizon << "s)."); */
-      }
-      /* const auto joined_traj = join_trajectories(approach_traj, follow_traj_res.value_or(traj_t())); */
-      const auto joined_traj = follow_traj_res.value_or(traj_t());
-      traj_t result_traj = orient_trajectory_yaw(joined_traj, pred_path);
-      result_traj.header.frame_id = m_world_frame;
-      result_traj.header.stamp = cur_t;
-      result_traj.use_yaw = true;
-      result_traj.fly_now = true;
-      assert(result_traj.points.size() == m_max_pts);
-
-      m_pub_cmd_traj.publish(result_traj);
-      if (m_pub_dbg_traj.getNumSubscribers() > 0)
-        m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+      case state_enum::waiting_for_prediction:
+        {
+          ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_PREDICTION'");
+          auto cur_pos_res = get_current_position();
+          if (cur_pos_res.has_value() && m_sh_ball_prediction->new_data())
+          {
+            const auto cur_ball_rpos = m_sh_ball_prediction->get_data()->filter_state.ukf_state.position;
+            const vec3_t cur_ball_pos(cur_ball_rpos.x, cur_ball_rpos.y, cur_ball_rpos.z);
+            m_path_offset = (cur_ball_pos - cur_pos_res.value()).norm();
+            m_state = state_enum::following;
+          }
+        }
+        break;
+      case state_enum::following:
+        {
+          ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING'");
+          /*  //{ */
+          
+          auto cur_pos_res = get_current_position();
+          if (m_sh_ball_prediction->new_data() && cur_pos_res.has_value())
+          {
+            const vec3_t cur_pos = cur_pos_res.value();
+            const auto ball_prediction = *(m_sh_ball_prediction->get_data());
+            const auto& pred_path = ball_prediction.predicted_path;
+            const auto& plane_params = ball_prediction.filter_state.fitted_plane;
+            /* const auto& ukf_state = ball_prediction.filter_state.ukf_state; */
+            /* const auto& est_speed = ukf_state.speed; */
+            const auto cur_stamp = ros::Time::now();
+            static auto prev_stamp = cur_stamp;
+            if (pred_path.poses.empty())
+            {
+              ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Received empty predicted path, cannot plan trajectory!");
+              return;
+            }
+            if (pred_path.poses.back().header.stamp < cur_stamp)
+            {
+              ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest predicted pose is older that current time, cannot plan trajectory!");
+              return;
+            }
+          
+            const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
+            const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
+            m_path_offset -= m_approach_speed*(cur_stamp - prev_stamp).toSec();
+          
+            /* const auto approach_pt = find_approach_pt(cur_pos, cur_stamp, tgt_path, est_speed); */
+            /* { */
+            /*   geometry_msgs::PointStamped msg; */
+            /*   msg.header.frame_id = m_world_frame; */
+            /*   msg.header.stamp = cur_stamp; */
+            /*   msg.point.x = approach_pt.x(); */
+            /*   msg.point.y = approach_pt.y(); */
+            /*   msg.point.z = approach_pt.z(); */
+            /*   m_pub_dbg_approach_pt.publish(msg); */
+            /* } */
+            /* const auto [approach_traj, approach_traj_duration] = sample_trajectory_between_pts(cur_pos, approach_pt, est_speed, m_trajectory_sampling_dt); */
+          
+            /* const ros::Duration dt_dur(m_trajectory_sampling_dt); */
+            /* const auto approach_traj_end_time = cur_stamp + approach_traj_duration; */
+          
+            /* const auto follow_traj_start_time = approach_traj_end_time + dt_dur; */
+            /* const size_t pts_remaining = m_max_pts - approach_traj.points.size(); */
+          
+            const auto follow_traj_start_time = ros::Time::now();
+            const size_t pts_remaining = m_max_pts;
+            std::optional<traj_t> follow_traj_res = std::nullopt;
+            if (pts_remaining > 0)
+            {
+              const auto [follow_traj, follow_traj_duration] = sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, pts_remaining);
+              follow_traj_res = follow_traj;
+              /* ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach traj:" << approach_traj_duration.toSec() << "s, " << approach_traj.points.size() << "pts; follow traj: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts"); */
+              /* ROS_WARN_STREAM("total traj time: " << approach_traj_duration+follow_traj_duration+dt_dur); */
+            } else
+            {
+              /* ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Approach trajectory takes longer than trajectory horizon (" << approach_traj_duration.toSec() << "s > " << m_trajectory_horizon << "s)."); */
+            }
+            /* const auto joined_traj = join_trajectories(approach_traj, follow_traj_res.value_or(traj_t())); */
+            const auto joined_traj = follow_traj_res.value_or(traj_t());
+            traj_t result_traj = orient_trajectory_yaw(joined_traj, pred_path);
+            result_traj.header.frame_id = m_world_frame;
+            result_traj.header.stamp = cur_stamp;
+            result_traj.use_yaw = true;
+            result_traj.fly_now = true;
+            assert(result_traj.points.size() == m_max_pts);
+          
+            m_pub_cmd_traj.publish(result_traj);
+            if (m_pub_dbg_traj.getNumSubscribers() > 0)
+              m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+            prev_stamp = cur_stamp;
+          }
+          
+          //}
+        }
+        break;
+      case state_enum::going_back:
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_BACK'");
+        break;
     }
   }
   //}
@@ -395,7 +426,7 @@ void BalloonPlanner::onInit()
 
   pl.load_param("world_frame", m_world_frame);
   pl.load_param("uav_frame_id", m_uav_frame_id);
-  pl.load_param("path_offset", m_path_offset);
+  pl.load_param("approach_speed", m_approach_speed);
 
   pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
   pl.load_param("trajectory/horizon", m_trajectory_horizon);
@@ -449,6 +480,7 @@ void BalloonPlanner::onInit()
   //}
 
   m_max_pts = std::floor(m_trajectory_horizon/m_trajectory_sampling_dt);
+  m_state = state_enum::waiting_for_prediction;
 
   ROS_INFO("[%s]: initialized", m_node_name.c_str());
 }

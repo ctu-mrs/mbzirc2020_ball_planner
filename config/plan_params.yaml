@@ -1,6 +1,7 @@
 planning_period: 0.01 # seconds
 world_frame: "local_origin"
-path_offset: 2.5 # metres
+# path_offset: 2.5 # metres
+approach_speed: 1.0 # metres per second
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
