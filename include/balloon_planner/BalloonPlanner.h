@@ -55,6 +55,7 @@ namespace balloon_planner
   using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
 
   using vec3_t = Eigen::Vector3d;
+  using vec4_t = Eigen::Vector4d;
   using quat_t = Eigen::Quaterniond;
   using path_t = nav_msgs::Path;
   using plane_t = balloon_filter::Plane;
@@ -99,9 +100,12 @@ namespace balloon_planner
       std::string m_uav_frame_id;
 
       double m_approach_speed;
+      double m_max_unseen_time;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
+
+      vec4_t m_start_position;
 
       //}
 
@@ -127,6 +131,7 @@ namespace balloon_planner
     private:
       state_t m_state;
       double m_path_offset;
+      ros::Time m_prev_plan_stamp;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
