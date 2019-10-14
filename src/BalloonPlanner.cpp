@@ -2,13 +2,16 @@
 
 namespace balloon_planner
 {
+  /* time_to_fly() method //{ */
   ros::Duration time_to_fly(const vec3_t& from_pt, const vec3_t& to_pt, const double speed)
   {
     const double dist = (from_pt - to_pt).norm();
     ros::Duration dur(dist / speed);
     return dur;
   }
+  //}
 
+  /* add_point_to_trajectory() method //{ */
   void add_point_to_trajectory(const vec3_t pt, traj_t& traj)
   {
     mrs_msgs::TrackerPoint tr_pt;
@@ -17,7 +20,7 @@ namespace balloon_planner
     tr_pt.z = pt.z();
     traj.points.push_back(tr_pt);
   }
-
+  
   void add_point_to_trajectory(const vec4_t pt, traj_t& traj)
   {
     mrs_msgs::TrackerPoint tr_pt;
@@ -27,6 +30,7 @@ namespace balloon_planner
     tr_pt.yaw = pt.w();
     traj.points.push_back(tr_pt);
   }
+  //}
 
   /* main_loop() method //{ */
   void BalloonPlanner::main_loop([[maybe_unused]] const ros::TimerEvent& evt)
@@ -180,11 +184,13 @@ namespace balloon_planner
   }
   //}
 
+  /* sign() method //{ */
   template <typename T>
   int sign(T val)
   {
     return (T(0) < val) - (val < T(0));
   }
+  //}
 
   /* calc_path_offset_vector() method //{ */
   vec3_t BalloonPlanner::calc_path_offset_vector(const plane_t& plane_params, const vec3_t& towards_pt, const double tolerance)
