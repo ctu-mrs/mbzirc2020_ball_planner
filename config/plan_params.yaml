@@ -18,3 +18,7 @@ start_position:
     5.0,   # z coordinate (metres)
     0.0    # yaw (radians)
   ]
+
+observing:
+  max_ball_angle: !degrees 20.0
+  ball_distance: 10 # metres

@@ -6,12 +6,12 @@ pattern:
   lin_cutoff:    1.0 # metres, how much of the radius will be cut-off in favour of the linear segment
   # parameters of transformation of the eight pattern
   rotation_ypr:  [1.0, 2.0, 0.0] # radians
-  translation:   [15.0, -3.0, 8.0] # metres
+  translation:   [0.0, 0.0, 5.0] # metres
 
 # parameters of the sampling
 sampling:
-  speed:  0.5 # metres per second
+  speed:  1.5 # metres per second
   dt:     0.2 # seconds
 
-plot_result: false # whether to plot the resulting trajectory using matplotlib
+plot_result: true # whether to plot the resulting trajectory using matplotlib
 save_header: false # whether to save the column names on the first row of the csv file (to make it more human-readable)

@@ -106,6 +106,8 @@ namespace balloon_planner
       double m_trajectory_horizon;
 
       vec4_t m_start_position;
+      double m_observing_max_ball_angle;
+      double m_observing_ball_distance;
 
       //}
 
@@ -132,29 +134,16 @@ namespace balloon_planner
       state_t m_state;
       double m_path_offset;
       ros::Time m_prev_plan_stamp;
+      ros::Time m_last_pred_path_stamp;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
       // --------------------------------------------------------------
 
-      /* get_transform_to_world() method //{ */
-      bool get_transform_to_world(const std::string& frame_name, ros::Time stamp, Eigen::Affine3d& tf_out)
-      {
-        try
-        {
-          const ros::Duration timeout(1.0 / 100.0);
-          geometry_msgs::TransformStamped transform = m_tf_buffer.lookupTransform(m_world_frame, frame_name, stamp, timeout);
-          tf_out = tf2::transformToEigen(transform.transform);
-        } catch (tf2::TransformException& ex)
-        {
-          ROS_WARN("Error during transform from \"%s\" frame to \"%s\" frame.\n\tMSG: %s", frame_name.c_str(), m_world_frame.c_str(), ex.what());
-          return false;
-        }
-        return true;
-      }
-      //}
-
+      std::optional<Eigen::Affine3d> get_transform(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
+      std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
       std::optional<vec3_t> get_current_position();
+
       vec3_t calc_path_offset_vector(const plane_t& plane_params, const vec3_t& towards_pt, const double tolerance = 1e-9);
       path_t offset_path(const path_t& path, const vec3_t& vector, const double offset);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
@@ -162,6 +151,7 @@ namespace balloon_planner
       std::tuple<traj_t, ros::Duration> sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
       traj_t orient_trajectory_yaw(const traj_t& traj, const path_t& to_path);
+      traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
 
