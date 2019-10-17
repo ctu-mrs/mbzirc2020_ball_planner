@@ -22,3 +22,4 @@ start_position:
 observing:
   max_ball_angle: !degrees 20.0
   ball_distance: 10 # metres
+  max_forward_speed: 0.1 # metres per second

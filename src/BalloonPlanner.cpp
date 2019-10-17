@@ -37,14 +37,35 @@ namespace balloon_planner
   {
     load_dynparams(m_drmgr_ptr->config);
 
-    if (m_sh_ball_prediction->has_data() && !m_sh_ball_prediction->peek_data()->predicted_path.poses.empty())
-      m_last_pred_path_stamp = m_sh_ball_prediction->peek_data()->header.stamp;
-
     switch (m_state)
     {
       case state_enum::waiting_for_prediction:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_PREDICTION'");
+        /*  //{ */
+        
+        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_PREDICTION]: Going to start point [" << m_start_position.transpose() << "]");
+        traj_t result_traj;
+        result_traj.header.frame_id = m_world_frame;
+        result_traj.header.stamp = ros::Time::now();
+        result_traj.use_yaw = true;
+        result_traj.fly_now = true;
+        add_point_to_trajectory(m_start_position, result_traj);
+        m_pub_cmd_traj.publish(result_traj);
+        
+        const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_prediction->last_message_time();
+        if (time_since_last_pred_msg < ros::Duration(m_max_unseen_time))
+        {
+          ROS_WARN_STREAM("[WAITING_FOR_PREDICTION]: Saw the ball, continuing!");
+          m_state = state_enum::observing;
+        }
+        
+        //}
+      }
+      break;
+      case state_enum::observing:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'OBSERVING'");
         /*  //{ */
         
         auto cur_pos_res = get_current_position();
@@ -72,20 +93,25 @@ namespace balloon_planner
               const vec3_t ball_mav_vec = tf_msg2uav_opt.value()*cur_ball_pos;
               const vec3_t x_vec(1, 0, 0);
               const auto rot = mrs_lib::angleaxis_between(ball_mav_vec, x_vec);
-              double cmd_angle = rot.angle();
-              if (std::abs(rot.angle()) > m_observing_max_ball_angle)
-                cmd_angle = mrs_lib::sign(rot.angle())*m_observing_max_ball_angle;
+              double cmd_angle = 0.9*rot.angle();
+              if (std::abs(cmd_angle) > m_observing_max_ball_angle)
+                cmd_angle = mrs_lib::sign(cmd_angle)*m_observing_max_ball_angle;
               const Eigen::AngleAxisd cmd_rot(cmd_angle, rot.axis());
 
-              const vec3_t uav_cmd_vec = m_observing_ball_distance*(cmd_rot*ball_mav_vec.normalized());
-              const vec3_t world_cmd_vec = tf_uav2world_opt.value()*uav_cmd_vec;
+              const double ball_dist = ball_mav_vec.norm();
+              const vec3_t uav_cmd_vec = (cmd_rot*ball_mav_vec)/ball_dist * (ball_dist - m_observing_ball_distance);
+              const vec3_t uav_cmd_vec_speed_limited = limit_cmd_vec_speed(uav_cmd_vec, {m_observing_max_forward_speed, -1, -1}, m_trajectory_sampling_dt, m_max_pts);
+              const vec3_t world_cmd_vec = tf_uav2world_opt.value()*uav_cmd_vec_speed_limited;
               auto cmd_traj = point_to_traj(world_cmd_vec, m_max_pts);
               cmd_traj.header.frame_id = m_world_frame;
               cmd_traj.header.stamp = ros::Time::now();
               cmd_traj.fly_now = true;
               cmd_traj.use_yaw = false;
               m_pub_cmd_traj.publish(cmd_traj);
-              ROS_WARN_STREAM_THROTTLE(1.0, "[WAITING_FOR_PREDICTION]: Going to point [" << world_cmd_vec.transpose() << "] (ball angle is " << rot.angle() << "rad)");
+              ROS_WARN_STREAM("[OBSERVING]: Going to point" << std::endl
+                  << "[" << world_cmd_vec.transpose() << "]" << std::endl
+                  << "(ball position is [" << cur_ball_pos.transpose() << "], ball angle is " << rot.angle() << "rad)" << std::endl
+                  << "ball distance is " << ball_dist << "m, desired dist. is " << m_observing_ball_distance << "m, going " << uav_cmd_vec.norm() << "m far");
             }
           }
         
@@ -97,6 +123,19 @@ namespace balloon_planner
             m_state = state_enum::following;
           }
         }
+
+        /* check time since last prediction message and abort if it's too long //{ */
+        
+        {
+          const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_prediction->last_message_time();
+          if (time_since_last_pred_msg > ros::Duration(m_max_unseen_time))
+          {
+            ROS_WARN_STREAM("[OBSERVING]: Lost ball, (time since last message: " << time_since_last_pred_msg.toSec() << "s). Going back to start!");
+            m_state = state_enum::waiting_for_prediction;
+          }
+        }
+        
+        //}
         
         //}
       }
@@ -149,36 +188,34 @@ namespace balloon_planner
           m_prev_plan_stamp = cur_stamp;
         }
 
+        /* check time since last prediction message and abort if it's too long //{ */
+        
         {
-          /* const auto last_message_time = m_sh_ball_prediction->last_message_time(); */
-          const auto time_since_last_path_prediction = ros::Time::now() - m_last_pred_path_stamp;
-          if (time_since_last_path_prediction > ros::Duration(m_max_unseen_time))
+          const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_prediction->last_message_time();
+          if (time_since_last_pred_msg > ros::Duration(m_max_unseen_time))
           {
-            m_state = state_enum::going_back;
+            ROS_WARN_STREAM("[FOLLOWING]: Lost ball, (time since last message: " << time_since_last_pred_msg.toSec() << "s). Going back to start!");
+            m_state = state_enum::waiting_for_prediction;
           }
         }
+        
+        //}
 
         //}
       }
       break;
-      case state_enum::going_back:
-      {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_BACK'");
-        /*  //{ */
-        
-        ROS_INFO_STREAM_THROTTLE(1.0, "[GOING_BACK]: Going to start point [" << m_start_position.transpose() << "]");
-        traj_t result_traj;
-        result_traj.header.frame_id = m_world_frame;
-        result_traj.header.stamp = ros::Time::now();
-        result_traj.use_yaw = true;
-        result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_position, result_traj);
-        m_pub_cmd_traj.publish(result_traj);
-        m_state = state_enum::waiting_for_prediction;
-        
-        //}
-      }
-      break;
+    }
+
+    {
+      sensor_msgs::Range observe_cone_msg;
+      observe_cone_msg.header.frame_id = m_uav_frame_id;
+      observe_cone_msg.header.stamp = ros::Time::now();
+      observe_cone_msg.field_of_view = 2*m_observing_max_ball_angle;
+      observe_cone_msg.range = m_observing_ball_distance;
+      observe_cone_msg.min_range = 0;
+      observe_cone_msg.max_range = std::numeric_limits<double>::max();
+      observe_cone_msg.radiation_type = uint8_t(666);
+      m_pub_dbg_observe_cone.publish(observe_cone_msg);
     }
   }
   //}
@@ -451,6 +488,30 @@ namespace balloon_planner
   }
   //}
 
+  /* limit_cmd_vec_speed() method //{ */
+  vec3_t BalloonPlanner::limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts)
+  {
+    assert(dt > 0.0);
+    const vec3_t max_traj_dvec = max_speed*dt;
+    vec3_t cmd_vector_speed_limited = cmd_vector;
+    double most_limiting = max_pts;
+    for (int it = 0; it < vec3_t::RowsAtCompileTime; it++)
+    {
+      if (max_speed(it) == 0.0)
+        cmd_vector_speed_limited(it) = 0.0;
+      else if (max_speed(it) > 0.0)
+      {
+        const double cur_n_pts = std::abs(cmd_vector(it) / max_traj_dvec(it));
+        if (cur_n_pts > most_limiting)
+          most_limiting = cur_n_pts;
+      }
+    }
+    const double limit_coeff = std::min(most_limiting, double(max_pts)) / double(most_limiting);
+    cmd_vector_speed_limited *= limit_coeff;
+    return cmd_vector_speed_limited;
+  }
+  //}
+
   traj_t BalloonPlanner::orient_trajectory_yaw(const traj_t& traj, const path_t& to_path)
   {
     return traj;  // TODO
@@ -534,6 +595,7 @@ namespace balloon_planner
 
     pl.load_param("observing/max_ball_angle", m_observing_max_ball_angle);
     pl.load_param("observing/ball_distance", m_observing_ball_distance);
+    pl.load_param("observing/max_forward_speed", m_observing_max_forward_speed);
 
     pl.load_matrix_static<4, 1>("start_position", m_start_position);
 
@@ -570,6 +632,7 @@ namespace balloon_planner
     m_pub_dbg_approach_pt = nh.advertise<geometry_msgs::PointStamped>("debug_approach_point", 1);
     m_pub_dbg_path_pose1 = nh.advertise<geometry_msgs::PoseStamped>("debug_path_pose1", 1);
     m_pub_dbg_path_pose2 = nh.advertise<geometry_msgs::PoseStamped>("debug_path_pose2", 1);
+    m_pub_dbg_observe_cone = nh.advertise<sensor_msgs::Range>("debig_observe_cone", 1);
 
     //}
 
@@ -586,7 +649,7 @@ namespace balloon_planner
     //}
 
     m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
-    m_state = state_enum::going_back;
+    m_state = state_enum::waiting_for_prediction;
 
     ROS_INFO("[%s]: initialized", m_node_name.c_str());
   }

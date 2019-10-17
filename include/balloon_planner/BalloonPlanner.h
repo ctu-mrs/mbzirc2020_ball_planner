@@ -23,6 +23,7 @@
 #include <nav_msgs/Path.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
+#include <sensor_msgs/Range.h>
 
 // MRS stuff
 #include <mrs_lib/Profiler.h>
@@ -66,8 +67,8 @@ namespace balloon_planner
     enum state_t
     {
       waiting_for_prediction,
+      observing,
       following,
-      going_back,
     };
   }
   using state_t = state_enum::state_t;
@@ -108,6 +109,7 @@ namespace balloon_planner
       vec4_t m_start_position;
       double m_observing_max_ball_angle;
       double m_observing_ball_distance;
+      double m_observing_max_forward_speed;
 
       //}
 
@@ -124,6 +126,7 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_approach_pt;
       ros::Publisher m_pub_dbg_path_pose1;
       ros::Publisher m_pub_dbg_path_pose2;
+      ros::Publisher m_pub_dbg_observe_cone;
 
       ros::Timer m_main_loop_timer;
       //}
@@ -134,7 +137,6 @@ namespace balloon_planner
       state_t m_state;
       double m_path_offset;
       ros::Time m_prev_plan_stamp;
-      ros::Time m_last_pred_path_stamp;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
@@ -151,6 +153,7 @@ namespace balloon_planner
       std::tuple<traj_t, ros::Duration> sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
       traj_t orient_trajectory_yaw(const traj_t& traj, const path_t& to_path);
+      static vec3_t limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts);
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
