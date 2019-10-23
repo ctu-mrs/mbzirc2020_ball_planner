@@ -57,85 +57,8 @@ namespace balloon_planner
         if (time_since_last_pred_msg < ros::Duration(m_max_unseen_time))
         {
           ROS_WARN_STREAM("[WAITING_FOR_PREDICTION]: Saw the ball, continuing!");
-          m_state = state_enum::observing;
+          m_state = state_enum::following;
         }
-        
-        //}
-      }
-      break;
-      case state_enum::observing:
-      {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'OBSERVING'");
-        /*  //{ */
-        
-        auto cur_pos_res = get_current_position();
-        if (cur_pos_res.has_value() && m_sh_ball_prediction->new_data())
-        {
-          const auto cur_ball_msg = m_sh_ball_prediction->get_data();
-          const auto cur_ball_rpos = cur_ball_msg->filter_state.ukf_state.position;
-          const vec3_t cur_ball_pos(cur_ball_rpos.x, cur_ball_rpos.y, cur_ball_rpos.z);
-        
-          // if no prediction is available, just follow the current ball position
-          const auto tf_msg2uav_opt = get_transform(cur_ball_msg->header.frame_id, m_uav_frame_id, cur_ball_msg->header.stamp);
-          if (tf_msg2uav_opt.has_value())
-          {
-            std::optional<Eigen::Affine3d> tf_uav2world_opt;
-            // this is usually the case and it will save us a redundant TF query
-            if (cur_ball_msg->header.frame_id == m_world_frame)
-              tf_uav2world_opt = tf_msg2uav_opt.value().inverse();
-            else
-              tf_uav2world_opt = get_transform(m_world_frame, m_uav_frame_id, cur_ball_msg->header.stamp);
-        
-            // All required transformations are known
-            if (tf_uav2world_opt.has_value())
-            {
-              // vector from the MAV to the ball (ball position in MAV frame)
-              const vec3_t ball_mav_vec = tf_msg2uav_opt.value()*cur_ball_pos;
-              const vec3_t x_vec(1, 0, 0);
-              const auto rot = mrs_lib::angleaxis_between(ball_mav_vec, x_vec);
-              double cmd_angle = 0.9*rot.angle();
-              if (std::abs(cmd_angle) > m_observing_max_ball_angle)
-                cmd_angle = mrs_lib::sign(cmd_angle)*m_observing_max_ball_angle;
-              const Eigen::AngleAxisd cmd_rot(cmd_angle, rot.axis());
-
-              const double ball_dist = ball_mav_vec.norm();
-              const vec3_t uav_cmd_vec = (cmd_rot*ball_mav_vec)/ball_dist * (ball_dist - m_observing_ball_distance);
-              const vec3_t uav_cmd_vec_speed_limited = limit_cmd_vec_speed(uav_cmd_vec, {m_observing_max_forward_speed, -1, -1}, m_trajectory_sampling_dt, m_max_pts);
-              const vec3_t world_cmd_vec = tf_uav2world_opt.value()*uav_cmd_vec_speed_limited;
-              auto cmd_traj = point_to_traj(world_cmd_vec, m_max_pts);
-              cmd_traj.header.frame_id = m_world_frame;
-              cmd_traj.header.stamp = ros::Time::now();
-              cmd_traj.fly_now = true;
-              cmd_traj.use_yaw = false;
-              m_pub_cmd_traj.publish(cmd_traj);
-              ROS_WARN_STREAM("[OBSERVING]: Going to point" << std::endl
-                  << "[" << world_cmd_vec.transpose() << "]" << std::endl
-                  << "(ball position is [" << cur_ball_pos.transpose() << "], ball angle is " << rot.angle() << "rad)" << std::endl
-                  << "ball distance is " << ball_dist << "m, desired dist. is " << m_observing_ball_distance << "m, going " << uav_cmd_vec.norm() << "m far");
-            }
-          }
-        
-          // if prediction is available, switch the state to start following the predicted path
-          if (!cur_ball_msg->predicted_path.poses.empty())
-          {
-            m_path_offset = (cur_ball_pos - cur_pos_res.value()).norm();
-            m_prev_plan_stamp = ros::Time::now();
-            m_state = state_enum::following;
-          }
-        }
-
-        /* check time since last prediction message and abort if it's too long //{ */
-        
-        {
-          const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_prediction->last_message_time();
-          if (time_since_last_pred_msg > ros::Duration(m_max_unseen_time))
-          {
-            ROS_WARN_STREAM("[OBSERVING]: Lost ball, (time since last message: " << time_since_last_pred_msg.toSec() << "s). Going back to start!");
-            m_state = state_enum::waiting_for_prediction;
-          }
-        }
-        
-        //}
         
         //}
       }
@@ -145,46 +68,30 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING'");
         /*  //{ */
 
-        auto cur_pos_res = get_current_position();
-        if (m_sh_ball_prediction->new_data() && cur_pos_res.has_value())
+        auto cur_pos_opt = get_current_position();
+        if (m_sh_ball_prediction->new_data() && cur_pos_opt.has_value())
         {
-          const vec3_t cur_pos = cur_pos_res.value();
-          const auto ball_prediction = *(m_sh_ball_prediction->get_data());
-          const auto& pred_path = ball_prediction.predicted_path;
-          const auto& plane_params = ball_prediction.filter_state.fitted_plane;
-          /* const auto& ukf_state = ball_prediction.filter_state.ukf_state; */
-          /* const auto& est_speed = ukf_state.speed; */
+          const vec3_t cur_pos = cur_pos_opt.value();
+          const auto ball_filtered = *(m_sh_ball_prediction->get_data());
           const auto cur_stamp = ros::Time::now();
-          if (pred_path.poses.empty())
-          {
-            ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Received empty predicted path, cannot plan trajectory!");
-            return;
-          }
-          if (pred_path.poses.back().header.stamp < cur_stamp)
-          {
-            ROS_ERROR_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest predicted pose is older that current time, cannot plan trajectory!");
-            return;
-          }
+          const vec3_t ball_pos(ball_filtered.pose.pose.position.x, ball_filtered.pose.pose.position.y, ball_filtered.pose.pose.position.z);
+          const vec3_t dir_vec = (ball_pos - cur_pos).normalized();
+          const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
+          const double yaw = std::atan2(offset_vec.y(), offset_vec.x());
+          const vec3_t tgt_pos = ball_pos - offset_vec;
 
-          const auto offset_vector = calc_path_offset_vector(plane_params, cur_pos);
-          const auto tgt_path = offset_path(pred_path, offset_vector, m_path_offset);
-          m_path_offset -= m_approach_speed * (cur_stamp - m_prev_plan_stamp).toSec();
-
-          const auto follow_traj_start_time = ros::Time::now();
-          const auto [follow_traj, follow_traj_duration] =
-              sample_trajectory_from_path(follow_traj_start_time, tgt_path, m_trajectory_sampling_dt, m_max_pts);
+          auto [follow_traj, follow_traj_duration] =
+              sample_trajectory_between_pts(cur_pos, tgt_pos, m_trajectory_sampling_dt, m_max_pts, yaw);
           ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Follow trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
 
-          traj_t result_traj = orient_trajectory_yaw(follow_traj, pred_path);
-          result_traj.header.frame_id = m_world_frame;
-          result_traj.header.stamp = cur_stamp;
-          result_traj.use_yaw = true;
-          result_traj.fly_now = true;
-          assert(result_traj.points.size() == m_max_pts);
+          follow_traj.header.frame_id = m_world_frame;
+          follow_traj.header.stamp = cur_stamp;
+          follow_traj.use_yaw = true;
+          follow_traj.fly_now = true;
 
-          m_pub_cmd_traj.publish(result_traj);
+          m_pub_cmd_traj.publish(follow_traj);
           if (m_pub_dbg_traj.getNumSubscribers() > 0)
-            m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+            m_pub_dbg_traj.publish(traj_to_path(follow_traj, m_trajectory_sampling_dt));
           m_prev_plan_stamp = cur_stamp;
         }
 
@@ -205,18 +112,6 @@ namespace balloon_planner
       }
       break;
     }
-
-    {
-      sensor_msgs::Range observe_cone_msg;
-      observe_cone_msg.header.frame_id = m_uav_frame_id;
-      observe_cone_msg.header.stamp = ros::Time::now();
-      observe_cone_msg.field_of_view = 2*m_observing_max_ball_angle;
-      observe_cone_msg.range = m_observing_ball_distance;
-      observe_cone_msg.min_range = 0;
-      observe_cone_msg.max_range = std::numeric_limits<double>::max();
-      observe_cone_msg.radiation_type = uint8_t(666);
-      m_pub_dbg_observe_cone.publish(observe_cone_msg);
-    }
   }
   //}
 
@@ -227,6 +122,19 @@ namespace balloon_planner
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
+    m_target_offset = cfg.trajectory__target_offset;
+  }
+  //}
+
+  /* calc_offset_vector() method //{ */
+  vec3_t BalloonPlanner::calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance)
+  {
+    vec3_t ret(dir_vec.x(), dir_vec.y(), 0.0);
+    if (ret.norm() < tolerance)
+      ret = vec3_t(-1.0, 0.0, 0.0);  // if dir_vec is vertical, offset in x by default
+    else
+      ret = ret.normalized();
+    return ret;
   }
   //}
 
@@ -269,22 +177,6 @@ namespace balloon_planner
   int sign(T val)
   {
     return (T(0) < val) - (val < T(0));
-  }
-  //}
-
-  /* calc_path_offset_vector() method //{ */
-  vec3_t BalloonPlanner::calc_path_offset_vector(const plane_t& plane_params, const vec3_t& towards_pt, const double tolerance)
-  {
-    const Eigen::Vector4d plane_theta(plane_params.normal.x, plane_params.normal.y, plane_params.normal.z, plane_params.offset);
-    const Eigen::Vector4d pt_tmp(towards_pt.x(), towards_pt.y(), towards_pt.z(), 1.0);
-    const double orientation = plane_theta.transpose() * pt_tmp;
-    const vec3_t normal = sign(orientation) * vec3_t(plane_params.normal.x, plane_params.normal.y, plane_params.normal.z);
-    vec3_t ret(normal.x(), normal.y(), 0.0);
-    if (ret.norm() < tolerance)
-      ret = vec3_t(-1.0, 0.0, 0.0);  // if the plane is horizontal, offset in x by default
-    else
-      ret = ret.normalized();
-    return ret;
   }
   //}
 
@@ -389,7 +281,7 @@ namespace balloon_planner
 
   /* sample_trajectory_between_pts() method //{ */
   std::tuple<traj_t, ros::Duration> BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed,
-                                                                                  const double dt)
+                                                                                  const double dt, const double yaw)
   {
     assert(speed > 0.0);
     assert(dt > 0.0);
@@ -407,7 +299,8 @@ namespace balloon_planner
     for (size_t it = 0; it < n_pts; it++)
     {
       const vec3_t cur_pt = from_pt + it * d_vec;
-      add_point_to_trajectory(cur_pt, ret);
+      const vec4_t cur_pt_with_yaw(cur_pt.x(), cur_pt.y(), cur_pt.z(), yaw);
+      add_point_to_trajectory(cur_pt_with_yaw, ret);
       /* add_point_to_path(cur_pt, cur_stamp, ret); */
     }
 
@@ -592,6 +485,7 @@ namespace balloon_planner
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
     pl.load_param("trajectory/horizon", m_trajectory_horizon);
+    pl.load_param("trajectory/target_offset", m_target_offset);
 
     pl.load_param("observing/max_ball_angle", m_observing_max_ball_angle);
     pl.load_param("observing/ball_distance", m_observing_ball_distance);
@@ -618,7 +512,7 @@ namespace balloon_planner
     m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
     mrs_lib::SubscribeMgr smgr(nh);
     constexpr bool time_consistent = true;
-    m_sh_ball_prediction = smgr.create_handler<balloon_filter::BallPrediction, time_consistent>("ball_prediction", ros::Duration(5.0));
+    m_sh_ball_prediction = smgr.create_handler<geometry_msgs::PoseWithCovarianceStamped, time_consistent>("ball_filtered", ros::Duration(5.0));
     /* m_sh_fitted_plane = smgr.create_handler<balloon_filter::Plane, time_consistent>("ball_fitted_plane", ros::Duration(5.0)); */
 
     //}
