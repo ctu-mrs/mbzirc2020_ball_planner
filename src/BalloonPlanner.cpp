@@ -81,7 +81,7 @@ namespace balloon_planner
           const vec3_t tgt_pos = ball_pos - offset_vec;
 
           auto [follow_traj, follow_traj_duration] =
-              sample_trajectory_between_pts(cur_pos, tgt_pos, m_trajectory_sampling_dt, m_max_pts, yaw);
+              sample_trajectory_between_pts(cur_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, yaw);
           ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Follow trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
 
           follow_traj.header.frame_id = m_world_frame;
