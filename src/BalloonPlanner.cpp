@@ -46,7 +46,7 @@ namespace balloon_planner
         
         ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_PREDICTION]: Going to start point [" << m_start_position.transpose() << "]");
         traj_t result_traj;
-        result_traj.header.frame_id = m_world_frame;
+        result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time::now();
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
@@ -54,7 +54,7 @@ namespace balloon_planner
         m_pub_cmd_traj.publish(result_traj);
         
         const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_prediction->last_message_time();
-        if (time_since_last_pred_msg < ros::Duration(m_max_unseen_time))
+        if (m_sh_ball_prediction->has_data() && time_since_last_pred_msg < ros::Duration(m_max_unseen_time))
         {
           ROS_WARN_STREAM("[WAITING_FOR_PREDICTION]: Saw the ball, continuing!");
           m_state = state_enum::following;
@@ -84,7 +84,7 @@ namespace balloon_planner
               sample_trajectory_between_pts(cur_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, yaw);
           ROS_INFO_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Follow trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
 
-          follow_traj.header.frame_id = m_world_frame;
+          follow_traj.header.frame_id = m_world_frame_id;
           follow_traj.header.stamp = cur_stamp;
           follow_traj.use_yaw = true;
           follow_traj.fly_now = true;
@@ -157,7 +157,7 @@ namespace balloon_planner
   /* get_transform_to_world() method //{ */
   std::optional<Eigen::Affine3d> BalloonPlanner::get_transform_to_world(const std::string& frame_id, ros::Time stamp)
   {
-    return get_transform(frame_id, m_world_frame, stamp);
+    return get_transform(frame_id, m_world_frame_id, stamp);
   }
   //}
 
@@ -304,7 +304,7 @@ namespace balloon_planner
       /* add_point_to_path(cur_pt, cur_stamp, ret); */
     }
 
-    ret.header.frame_id = m_world_frame;
+    ret.header.frame_id = m_world_frame_id;
     ret.header.stamp = ros::Time::now();
     m_pub_dbg_approach_traj.publish(traj_to_path(ret, dt));
 
@@ -362,7 +362,7 @@ namespace balloon_planner
     }
     const ros::Duration traj_dur((n_pts - 1) * dt);
 
-    ret.header.frame_id = m_world_frame;
+    ret.header.frame_id = m_world_frame_id;
     ret.header.stamp = ros::Time::now();
     m_pub_dbg_follow_traj.publish(traj_to_path(ret, dt));
 
@@ -478,7 +478,7 @@ namespace balloon_planner
 
     const double planning_period = pl.load_param2<double>("planning_period");
 
-    pl.load_param("world_frame", m_world_frame);
+    pl.load_param("world_frame_id", m_world_frame_id);
     pl.load_param("uav_frame_id", m_uav_frame_id);
     pl.load_param("approach_speed", m_approach_speed);
     pl.load_param("max_unseen_time", m_max_unseen_time);

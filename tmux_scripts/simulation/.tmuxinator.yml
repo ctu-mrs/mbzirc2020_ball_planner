@@ -21,8 +21,8 @@ windows:
   - control:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_general core.launch
-        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_general core.launch
+        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml
+        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml
   - takeoff:
       layout: even-vertical
       panes:
@@ -53,23 +53,25 @@ windows:
       panes:
         - '
           waitForControl;
-          roslaunch balloon_planner generate_eight.launch;
+          roslaunch balloon_filter generate_eight.launch;
           roslaunch trajectory_loader multimaster_trajectories_loader.launch loop:=true;
-          history -s roslaunch trajectory_loader multimaster_start_following.launch;
+          sleep 15;
+          roslaunch trajectory_loader multimaster_start_following.launch;
+          rosservice call /uav1/control_manager/goto "goal: [4.0, -2.0, 7.0, 0.0]"
           '
   - detector:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch object_detect object_detect.launch
-  # - balloon_planner:
-  #     layout: even-vertical
-  #     panes:
-        # - waitForRos; roslaunch balloon_planner sim_plan.launch
-  # - compressed_republish:
-  #     layout: even-vertical
-  #     panes:
-  #       - waitForControl; rosrun image_transport republish raw in:=/uav1/balloon_detect/debug_image compressed out:=/uav1/balloon_detect/debug_image
-  # - fake_screen:
-  #     layout: even-vertical
-  #     panes:
-  #       - ~/git/linux-setup/scripts/fake_screen.sh
+  - filter:
+      layout: even-vertical
+      panes:
+        - waitForControl; roslaunch balloon_filter filter_eightball.launch
+  - filter:
+      layout: even-vertical
+      panes:
+        - waitForControl; roslaunch balloon_filter filter_eightball.launch
+  - filter:
+      layout: even-vertical
+      panes:
+        - waitForControl; roslaunch balloon_planner catch_eightball.launch

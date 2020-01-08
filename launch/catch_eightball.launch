@@ -15,11 +15,12 @@
     <node pkg="nodelet" type="nodelet" name="balloon_planner" args="standalone balloon_planner/BalloonPlanner" output="screen" launch-prefix="$(arg launch_prefix)" >
 
       <param name="uav_name" type="string" value="$(arg uav_name)" />
-      <param name="uav_frame_id" type="string" value="fcu_$(arg uav_name)" />
+      <param name="uav_frame_id" type="string" value="$(arg uav_name)/fcu" />
+      <param name="world_frame_id" type="string" value="$(arg uav_name)/local_origin" />
       <rosparam file="$(find balloon_planner)/config/plan_params.yaml" command="load" />
 
       <!-- Subscribers -->
-      <remap from="~ball_filtered" to="balloon_filter/balloon_chosen_out" />
+      <remap from="~ball_filtered" to="balloon_filter/detection_used" />
 
       <!-- Publishers -->
       <!-- <remap from="~commanded_trajectory" to="~commanded_trajectory" /> -->

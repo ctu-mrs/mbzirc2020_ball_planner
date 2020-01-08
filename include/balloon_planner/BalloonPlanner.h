@@ -94,7 +94,7 @@ namespace balloon_planner
       // --------------------------------------------------------------
 
       /* Parameters, loaded from ROS //{ */
-      std::string m_world_frame;
+      std::string m_world_frame_id;
       std::string m_uav_frame_id;
 
       double m_approach_speed;
