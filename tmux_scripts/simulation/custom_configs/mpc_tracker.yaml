@@ -1,0 +1,2 @@
+cvxgenMpc:
+  no_overshoots: false # disable for more aggresive flight

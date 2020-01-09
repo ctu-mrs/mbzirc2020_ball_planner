@@ -16,7 +16,7 @@ start_position:
     0.0,   # x coordinate (metres)
     -25.0,  # y coordinate (metres)
     8.0,   # z coordinate (metres)
-    0.0    # yaw (radians)
+    -0.2    # yaw (radians)
   ]
 
 observing:

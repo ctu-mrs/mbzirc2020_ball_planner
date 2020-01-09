@@ -21,8 +21,8 @@ windows:
   - control:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml
-        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml
+        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml config_gain_manager:=custom_configs/gain_manager.yaml config_mpc_tracker:=custom_configs/mpc_tracker.yaml
+        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml config_gain_manager:=custom_configs/gain_manager.yaml config_mpc_tracker:=custom_configs/mpc_tracker.yaml
   - takeoff:
       layout: even-vertical
       panes:
@@ -67,11 +67,11 @@ windows:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch balloon_filter filter_eightball.launch
-  - filter:
-      layout: even-vertical
-      panes:
-        - waitForControl; roslaunch balloon_filter filter_eightball.launch
-  - filter:
+  - planner:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch balloon_planner catch_eightball.launch
+  - mrs_status:
+      layout: even-vertical
+      panes:
+        - waitForControl; roslaunch mrs_status status.launch
