@@ -140,14 +140,18 @@ namespace balloon_planner
             const vec3_t ball_pos(ball_pos_ros.pose.position.x, ball_pos_ros.pose.position.y, ball_pos_ros.pose.position.z);
             const vec3_t dir_vec = (ball_pos - cur_pos).normalized();
             const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
-            /* const double yaw = std::atan2(offset_vec.y(), offset_vec.x()); */
-            /* const vec3_t tgt_pos = ball_pos - offset_vec; */
 
             const auto tgt_path = offset_path(pred_path, offset_vec);
             auto [chase_traj, chase_traj_duration] =
                 sample_trajectory_from_path(ros::Time::now(), tgt_path, m_trajectory_sampling_dt, m_max_pts);
             ROS_INFO_STREAM_THROTTLE(1.0, "[CHASING_PREDICTION]: Chase trajectory: " << chase_traj_duration.toSec() << "s, " << chase_traj.points.size() << "pts");
-            chase_traj = orient_trajectory_yaw(chase_traj, pred_path);
+            /* chase_traj = orient_trajectory_yaw(chase_traj, pred_path); */
+            for (auto& pt : chase_traj.points)
+            {
+              const vec3_t cur_traj_pt(pt.x, pt.y, pt.z);
+              const vec3_t offset_vec = ball_pos - cur_traj_pt;
+              pt.yaw = std::atan2(offset_vec.y(), offset_vec.x());
+            }
 
             chase_traj.header.frame_id = m_world_frame_id;
             chase_traj.header.stamp = cur_stamp;
