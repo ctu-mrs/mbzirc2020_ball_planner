@@ -38,6 +38,7 @@ input=(
   'Prepare UAV1' "export UAV_NAME=uav1; waitForControl; rosservice call /$UAV_NAME/mavros/cmd/arming 1; rosservice call /$UAV_NAME/control_manager/motors 1; rosservice call /$UAV_NAME/mavros/set_mode 0 offboard; rosservice call /$UAV_NAME/uav_manager/takeoff;
 "
   'Prepare UAV2' "export UAV_NAME=uav2; waitForControl; rosservice call /uav2/mavros/cmd/arming 1; rosservice call /uav2/control_manager/motors 1; rosservice call /uav2/mavros/set_mode 0 offboard; rosservice call /uav2/uav_manager/takeoff;
+rosservice call /uav2/control_manager/goto \"goal: [3.0, 3.0, 5.0, 0.6]\"
 "
   'Trajectory' "waitForControl;
 roslaunch balloon_filter generate_eight.launch;
