@@ -40,6 +40,7 @@
 #include <mutex>
 
 // local includes
+#include <balloon_filter/BallPrediction.h>
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_planner/ResetChosen.h>
 #include <mrs_msgs/TrackerTrajectory.h>
@@ -64,8 +65,9 @@ namespace balloon_planner
   {
     enum state_t
     {
-      waiting_for_prediction,
-      following,
+      waiting_for_detection,
+      following_detection,
+      chasing_prediction,
     };
   }
   using state_t = state_enum::state_t;
@@ -115,7 +117,8 @@ namespace balloon_planner
       std::unique_ptr<drmgr_t> m_drmgr_ptr;
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-      mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_prediction;
+      mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
+      mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
