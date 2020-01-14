@@ -143,7 +143,7 @@ namespace balloon_planner
             /* const double yaw = std::atan2(offset_vec.y(), offset_vec.x()); */
             /* const vec3_t tgt_pos = ball_pos - offset_vec; */
 
-            const auto tgt_path = offset_path(pred_path, offset_vec, m_path_offset);
+            const auto tgt_path = offset_path(pred_path, offset_vec);
             auto [chase_traj, chase_traj_duration] =
                 sample_trajectory_from_path(ros::Time::now(), tgt_path, m_trajectory_sampling_dt, m_max_pts);
             ROS_INFO_STREAM_THROTTLE(1.0, "[CHASING_PREDICTION]: Chase trajectory: " << chase_traj_duration.toSec() << "s, " << chase_traj.points.size() << "pts");
@@ -247,9 +247,8 @@ namespace balloon_planner
   //}
 
   /* offset_path() method //{ */
-  path_t BalloonPlanner::offset_path(const path_t& path, const vec3_t& vector, const double offset)
+  path_t BalloonPlanner::offset_path(const path_t& path, const vec3_t& off_vec)
   {
-    const vec3_t off_vec = vector * offset;
     path_t ret = path;
     for (auto& pose : ret.poses)
     {
@@ -498,16 +497,6 @@ namespace balloon_planner
 
         const auto next_pose_it = prev_pose_it + 1;
         next_pose = to_path.poses.at(next_pose_it);
-      }
-
-      if (it == 0)
-      {
-        m_pub_dbg_path_pose1.publish(prev_pose);
-        m_pub_dbg_path_pose2.publish(next_pose);
-
-        /*       ROS_INFO_STREAM("cur_stamp: " << std::endl << cur_stamp); */
-        /*       ROS_INFO_STREAM("prev_pose: " << std::endl << prev_pose); */
-        /*       ROS_INFO_STREAM("next_pose: " << std::endl << next_pose); */
       }
 
       auto cur_traj_pt_ros = traj.points.at(it);
