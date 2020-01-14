@@ -1,3 +1,7 @@
 takeoff:
   after_takeoff:
     controller: "So3Controller"
+
+max_thrust:
+  enabled: false
+  max_thrust: 0.90 # [-]

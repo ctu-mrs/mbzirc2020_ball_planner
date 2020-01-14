@@ -11,7 +11,7 @@ windows:
   - gazebo:
       layout: even-vertical
       panes:
-        - waitForRos; roslaunch balloon_simulation simulation.launch gui:=false
+        - waitForRos; export DISPLAY=:1; roslaunch balloon_simulation simulation.launch gui:=false
         - waitForRos; roslaunch balloon_attacher attacher.launch
   - spawn:
       layout: even-vertical
