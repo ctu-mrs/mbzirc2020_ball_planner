@@ -139,30 +139,16 @@ namespace balloon_planner
             const auto ball_pos_ros = pred_path.poses.front();
             const vec3_t ball_pos(ball_pos_ros.pose.position.x, ball_pos_ros.pose.position.y, ball_pos_ros.pose.position.z);
             const vec3_t dir_vec = (ball_pos - cur_pos).normalized();
-            /* const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec); */
-            const vec3_t offset_vec = 0.001*calc_horizontal_offset_vector(dir_vec);
+            const vec3_t offset_vec = -m_target_offset*calc_horizontal_offset_vector(dir_vec);
             /* const double yaw = std::atan2(offset_vec.y(), offset_vec.x()); */
             const auto tgt_path = offset_path(pred_path, offset_vec);
 
-            const vec3_t approach_pt = find_approach_pt(cur_pos, cur_time, tgt_path, m_approach_speed);
             auto [follow_traj, follow_traj_duration] =
-                sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
+                sample_trajectory_between_pts(cur_pos, ball_pos, m_approach_speed, m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_DETECTION]: Approach trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
-            const int remaining_pts = std::floor((m_trajectory_horizon - follow_traj_duration.toSec()) / m_trajectory_sampling_dt);
 
-            auto [chase_traj, chase_traj_duration] =
-                sample_trajectory_from_path(cur_time + follow_traj_duration, tgt_path, m_trajectory_sampling_dt, remaining_pts);
-            ROS_INFO_STREAM_THROTTLE(1.0, "[CHASING_PREDICTION]: Chase trajectory: " << chase_traj_duration.toSec() << "s, " << chase_traj.points.size() << "pts");
-            chase_traj = orient_trajectory_yaw(chase_traj, pred_path);
-
-            auto total_traj = join_trajectories(follow_traj, chase_traj);
+            traj_t& total_traj = follow_traj;
             total_traj = orient_trajectory_yaw(total_traj, pred_path);
-            for (auto& pt : total_traj.points)
-            {
-              const vec3_t cur_traj_pt(pt.x, pt.y, pt.z);
-              const vec3_t offset_vec = ball_pos - cur_traj_pt;
-              pt.yaw = std::atan2(offset_vec.y(), offset_vec.x());
-            }
 
             total_traj.header.frame_id = m_world_frame_id;
             total_traj.header.stamp = cur_time;
