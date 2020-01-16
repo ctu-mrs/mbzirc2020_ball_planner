@@ -67,6 +67,7 @@ namespace balloon_planner
     {
       waiting_for_detection,
       following_detection,
+      following_prediction,
       chasing_prediction,
     };
   }
@@ -154,11 +155,13 @@ namespace balloon_planner
       std::tuple<traj_t, ros::Duration> sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw = 0.0);
       std::tuple<traj_t, ros::Duration> sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
-      traj_t orient_trajectory_yaw(const traj_t& traj, const path_t& to_path);
+      traj_t orient_trajectory_yaw_observe(const traj_t& traj, const path_t& to_path);
+      traj_t orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path);
       static vec3_t limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts);
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
+      traj_t path_to_traj(const path_t& path);
 
       void load_dynparams(drcfg_t cfg);
 
