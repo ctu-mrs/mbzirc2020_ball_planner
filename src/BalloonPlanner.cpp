@@ -127,7 +127,7 @@ namespace balloon_planner
         {
           const vec3_t cur_pos = cur_pos_opt.value();
           const auto ball_prediction = *(m_sh_ball_prediction->get_data());
-          const auto cur_stamp = ros::Time::now();
+          const auto cur_time = ros::Time::now();
           const auto& pred_path = ball_prediction.predicted_path;
           if (pred_path.poses.empty())
           {
@@ -139,29 +139,40 @@ namespace balloon_planner
             const auto ball_pos_ros = pred_path.poses.front();
             const vec3_t ball_pos(ball_pos_ros.pose.position.x, ball_pos_ros.pose.position.y, ball_pos_ros.pose.position.z);
             const vec3_t dir_vec = (ball_pos - cur_pos).normalized();
-            const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
-
+            /* const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec); */
+            const vec3_t offset_vec = 0.001*calc_horizontal_offset_vector(dir_vec);
+            /* const double yaw = std::atan2(offset_vec.y(), offset_vec.x()); */
             const auto tgt_path = offset_path(pred_path, offset_vec);
+
+            const vec3_t approach_pt = find_approach_pt(cur_pos, cur_time, tgt_path, m_approach_speed);
+            auto [follow_traj, follow_traj_duration] =
+                sample_trajectory_between_pts(cur_pos, approach_pt, m_approach_speed, m_trajectory_sampling_dt);
+            ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_DETECTION]: Approach trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
+            const int remaining_pts = std::floor((m_trajectory_horizon - follow_traj_duration.toSec()) / m_trajectory_sampling_dt);
+
             auto [chase_traj, chase_traj_duration] =
-                sample_trajectory_from_path(ros::Time::now(), tgt_path, m_trajectory_sampling_dt, m_max_pts);
+                sample_trajectory_from_path(cur_time + follow_traj_duration, tgt_path, m_trajectory_sampling_dt, remaining_pts);
             ROS_INFO_STREAM_THROTTLE(1.0, "[CHASING_PREDICTION]: Chase trajectory: " << chase_traj_duration.toSec() << "s, " << chase_traj.points.size() << "pts");
-            /* chase_traj = orient_trajectory_yaw(chase_traj, pred_path); */
-            for (auto& pt : chase_traj.points)
+            chase_traj = orient_trajectory_yaw(chase_traj, pred_path);
+
+            auto total_traj = join_trajectories(follow_traj, chase_traj);
+            total_traj = orient_trajectory_yaw(total_traj, pred_path);
+            for (auto& pt : total_traj.points)
             {
               const vec3_t cur_traj_pt(pt.x, pt.y, pt.z);
               const vec3_t offset_vec = ball_pos - cur_traj_pt;
               pt.yaw = std::atan2(offset_vec.y(), offset_vec.x());
             }
 
-            chase_traj.header.frame_id = m_world_frame_id;
-            chase_traj.header.stamp = cur_stamp;
-            chase_traj.use_yaw = true;
-            chase_traj.fly_now = true;
+            total_traj.header.frame_id = m_world_frame_id;
+            total_traj.header.stamp = cur_time;
+            total_traj.use_yaw = true;
+            total_traj.fly_now = true;
 
-            m_pub_cmd_traj.publish(chase_traj);
+            m_pub_cmd_traj.publish(total_traj);
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
-              m_pub_dbg_traj.publish(traj_to_path(chase_traj, m_trajectory_sampling_dt));
-            m_prev_plan_stamp = cur_stamp;
+              m_pub_dbg_traj.publish(traj_to_path(total_traj, m_trajectory_sampling_dt));
+            m_prev_plan_stamp = cur_time;
           }
         }
 
@@ -193,6 +204,8 @@ namespace balloon_planner
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
     m_target_offset = cfg.trajectory__target_offset;
+    m_trajectory_horizon = cfg.trajectory__horizon;
+    m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
   }
   //}
 
@@ -358,7 +371,7 @@ namespace balloon_planner
     const vec3_t diff_vec = to_pt - from_pt;
     const double dist = diff_vec.norm();
     const size_t n_pts = std::min(size_t(std::ceil(dist / (speed * dt))) + 1, m_max_pts);
-    const ros::Duration traj_dur((n_pts - 1) * dt);
+    const ros::Duration traj_dur(n_pts > 0 ? (n_pts - 1) * dt : 0);
     const double speed_scaled = dist / traj_dur.toSec();
     ROS_INFO_STREAM("[]: scaled speed : " << speed_scaled << "m/s (orig: " << speed << "m/s)");
     const vec3_t d_vec = speed_scaled * dt * diff_vec / dist;
@@ -429,7 +442,7 @@ namespace balloon_planner
 
       cur_stamp += dt_dur;
     }
-    const ros::Duration traj_dur((n_pts - 1) * dt);
+    const ros::Duration traj_dur(n_pts > 0 ? (n_pts - 1) * dt : 0);
 
     ret.header.frame_id = m_world_frame_id;
     ret.header.stamp = ros::Time::now();
@@ -590,8 +603,6 @@ namespace balloon_planner
     pl.load_param("max_unseen_time", m_max_unseen_time);
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
-    pl.load_param("trajectory/horizon", m_trajectory_horizon);
-    pl.load_param("trajectory/target_offset", m_target_offset);
 
     pl.load_param("observing/max_ball_angle", m_observing_max_ball_angle);
     pl.load_param("observing/ball_distance", m_observing_ball_distance);
@@ -649,7 +660,6 @@ namespace balloon_planner
 
     //}
 
-    m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
     m_state = state_enum::waiting_for_detection;
 
     ROS_INFO("[%s]: initialized", m_node_name.c_str());

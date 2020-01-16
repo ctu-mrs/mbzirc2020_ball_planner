@@ -5,7 +5,7 @@ approach_speed: 8.0 # metres per second
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_offset: 2 # metres
+  target_offset: 0.2 # metres
 
 z_bounds:
   min: 0.0
