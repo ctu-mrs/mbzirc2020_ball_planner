@@ -107,10 +107,8 @@ namespace balloon_planner
       double m_trajectory_horizon;
 
       vec4_t m_start_position;
-      double m_observing_max_ball_angle;
-      double m_observing_ball_distance;
-      double m_observing_max_forward_speed;
       double m_target_offset;
+      double m_catch_trigger_distance;
 
       //}
 
@@ -121,6 +119,7 @@ namespace balloon_planner
       mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
       mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_cmd_odom;
+      mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_main_odom;
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
@@ -150,6 +149,7 @@ namespace balloon_planner
       std::optional<Eigen::Affine3d> get_transform(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
       std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
       std::optional<vec3_t> get_current_position();
+      std::optional<vec3_t> get_current_cmd_position();
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);

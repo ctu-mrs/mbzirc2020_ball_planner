@@ -2,7 +2,8 @@ planning_period: 0.01 # seconds
 # path_offset: 2.5 # metres
 max_unseen_time: 5.0 # seconds
 approach_speed: 8.0 # metres per second
-chase_speed: 1.0 # metres per second
+chase_speed: 10.0 # metres per second
+catch_trigger_distance: 2.5 # metres
 
 trajectory:
   sampling_dt: 0.2 # seconds
