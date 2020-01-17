@@ -76,7 +76,7 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING_DETECTION'");
         /*  //{ */
 
-        auto cur_cmd_pos_opt = get_current_position();
+        auto cur_cmd_pos_opt = get_current_cmd_position();
         if (m_sh_ball_detection->new_data() && cur_cmd_pos_opt.has_value())
         {
           const vec3_t cur_cmd_pos = cur_cmd_pos_opt.value();
@@ -134,7 +134,7 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING_PREDICTION'");
         /*  //{ */
 
-        auto cur_cmd_pos_opt = get_current_position();
+        auto cur_cmd_pos_opt = get_current_cmd_position();
         if (m_sh_ball_prediction->new_data() && cur_cmd_pos_opt.has_value())
         {
           const vec3_t cur_cmd_pos = cur_cmd_pos_opt.value();
@@ -212,7 +212,7 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'CHASING_PREDICTION'");
         /*  //{ */
 
-        auto cur_cmd_pos_opt = get_current_position();
+        auto cur_cmd_pos_opt = get_current_cmd_position();
         if (m_sh_ball_prediction->new_data() && cur_cmd_pos_opt.has_value())
         {
           const auto ball_prediction = *(m_sh_ball_prediction->get_data());
