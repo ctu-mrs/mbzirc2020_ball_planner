@@ -214,6 +214,7 @@ namespace balloon_planner
             // if the flow gets here, then ball_prediction.predicted_path.poses has at least one element
             const auto ball_pos_ros = pred_path.poses.front();
             const vec3_t ball_pos(ball_pos_ros.pose.position.x, ball_pos_ros.pose.position.y, ball_pos_ros.pose.position.z);
+            const double ball_expected_speed = ball_prediction.filter_state.expected_speed;
 
             auto follow_traj = sample_trajectory_between_pts(cur_pos, ball_pos, m_approach_speed, m_trajectory_sampling_dt);
             const auto follow_traj_duration = trajectory_duration(follow_traj.points.size(), m_trajectory_sampling_dt);
@@ -221,7 +222,7 @@ namespace balloon_planner
             follow_traj = orient_trajectory_yaw_observe(follow_traj, pred_path);
 
             const int n_pts = m_max_pts - follow_traj.points.size();
-            auto chase_traj = sample_trajectory_from_path(ball_pos_ros.header.stamp, pred_path, m_trajectory_sampling_dt, n_pts);
+            auto chase_traj = sample_trajectory_from_path(pred_path, m_trajectory_sampling_dt, ball_expected_speed + m_chase_speed, n_pts);
             const auto chase_traj_duration = trajectory_duration(follow_traj.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[CHASING_PREDICTION]: Chase trajectory: " << chase_traj_duration.toSec() << "s, " << chase_traj.points.size() << "pts");
             chase_traj = orient_trajectory_yaw_speed(chase_traj, pred_path);
@@ -267,6 +268,7 @@ namespace balloon_planner
     m_trajectory_horizon = cfg.trajectory__horizon;
     m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
     m_approach_speed = cfg.approach_speed;
+    m_chase_speed = cfg.chase_speed;
   }
   //}
 

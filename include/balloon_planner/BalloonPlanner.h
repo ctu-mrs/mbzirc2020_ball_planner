@@ -101,6 +101,7 @@ namespace balloon_planner
       std::string m_uav_frame_id;
 
       double m_approach_speed;
+      double m_chase_speed;
       double m_max_unseen_time;
 
       double m_trajectory_sampling_dt;
