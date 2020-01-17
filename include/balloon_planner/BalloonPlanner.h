@@ -152,8 +152,10 @@ namespace balloon_planner
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
-      std::tuple<traj_t, ros::Duration> sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw = 0.0);
-      std::tuple<traj_t, ros::Duration> sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
+      ros::Duration trajectory_duration(const int n_traj_pts, const double dt);
+      traj_t sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw = 0.0);
+      traj_t sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts);
+      traj_t sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
       traj_t orient_trajectory_yaw_observe(const traj_t& traj, const path_t& to_path);
       traj_t orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path);
