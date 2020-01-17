@@ -551,13 +551,13 @@ namespace balloon_planner
       // Find prev_pose which is before start_stamp with cur_pose being after start_stamp and next after prev_pose
       while (dlen_cur < dlen_remaining)
       {
-        dlen_remaining -= dlen_cur;
         if (prev_pose_it >= (int)path.poses.size() - 2)
         {
           ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
           break;
         }
 
+        dlen_remaining -= dlen_cur;
         prev_pose_it++;
         prev_pose = path.poses.at(prev_pose_it);
 
