@@ -22,6 +22,7 @@
       <!-- Subscribers -->
       <remap from="~ball_filtered" to="balloon_filter/detection_used" />
       <remap from="~ball_prediction" to="balloon_filter/ball_prediction" />
+      <remap from="~cmd_odom" to="control_manager/cmd_odom" />
 
       <!-- Publishers -->
       <!-- <remap from="~commanded_trajectory" to="~commanded_trajectory" /> -->

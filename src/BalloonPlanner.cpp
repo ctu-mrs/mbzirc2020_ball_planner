@@ -261,6 +261,29 @@ namespace balloon_planner
   // |                       Helper methods                       |
   // --------------------------------------------------------------
 
+  /* to_eigen() method //{ */
+  quat_t to_eigen(const geometry_msgs::Quaternion& quat)
+  {
+    quat_t ret;
+    ret.w() = quat.w;
+    ret.x() = quat.x;
+    ret.y() = quat.y;
+    ret.z() = quat.z;
+    return ret;
+  }
+  //}
+
+  /* to_eigen() method //{ */
+  vec3_t to_eigen(const geometry_msgs::Point& point)
+  {
+    vec3_t ret;
+    ret.x() = point.x;
+    ret.y() = point.y;
+    ret.z() = point.z;
+    return ret;
+  }
+  //}
+
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
@@ -310,11 +333,15 @@ namespace balloon_planner
   /* get_current_position() method //{ */
   std::optional<vec3_t> BalloonPlanner::get_current_position()
   {
-    const auto uav2world_tf_opt = get_transform_to_world(m_uav_frame_id, ros::Time(0.0));
-    if (uav2world_tf_opt.has_value())
-      return uav2world_tf_opt.value() * vec3_t(0, 0, 0);
-    else
+    if (!m_sh_cmd_odom->has_data())
       return std::nullopt;
+    const nav_msgs::Odometry cmd_odom = *(m_sh_cmd_odom->get_data());
+    const auto tf_opt = get_transform_to_world(cmd_odom.header.frame_id, cmd_odom.header.stamp);
+    if (!tf_opt.has_value())
+      return std::nullopt;
+    const vec3_t cmd_pos = to_eigen(cmd_odom.pose.pose.position);
+    const vec3_t cmd_pos_global = tf_opt.value()*cmd_pos;
+    return cmd_pos_global;
   }
   //}
 
@@ -347,29 +374,6 @@ namespace balloon_planner
     const vec3_t diff_vec = to_pt - line_pt1;
     const double param = diff_vec.dot(line_dir);
     return param;
-  }
-  //}
-
-  /* to_eigen() method //{ */
-  quat_t to_eigen(const geometry_msgs::Quaternion& quat)
-  {
-    quat_t ret;
-    ret.w() = quat.w;
-    ret.x() = quat.x;
-    ret.y() = quat.y;
-    ret.z() = quat.z;
-    return ret;
-  }
-  //}
-
-  /* to_eigen() method //{ */
-  vec3_t to_eigen(const geometry_msgs::Point& point)
-  {
-    vec3_t ret;
-    ret.x() = point.x;
-    ret.y() = point.y;
-    ret.z() = point.z;
-    return ret;
   }
   //}
 
@@ -484,7 +488,7 @@ namespace balloon_planner
     const size_t n_pts = std::min(size_t(std::ceil(dist / (speed * dt))) + 1, m_max_pts);
     const ros::Duration traj_dur = trajectory_duration(n_pts, dt);
     const double speed_scaled = dist / traj_dur.toSec();
-    ROS_INFO_STREAM("[]: scaled speed : " << speed_scaled << "m/s (orig: " << speed << "m/s)");
+    /* ROS_INFO_STREAM("[]: scaled speed : " << speed_scaled << "m/s (orig: " << speed << "m/s)"); */
     const vec3_t d_vec = speed_scaled * dt * diff_vec / dist;
 
     traj_t ret;
@@ -512,10 +516,10 @@ namespace balloon_planner
     traj_t ret;
     ret.points.reserve(n_pts);
 
+    double dlen_remaining = dt*speed;
     int prev_pose_it = 0;
     for (size_t it = 0; it < n_pts; it++)
     {
-      double dlen_remaining = dt*speed;
       geometry_msgs::PoseStamped prev_pose = path.poses.at(prev_pose_it);
       geometry_msgs::PoseStamped next_pose = path.poses.at(prev_pose_it + 1);
       vec3_t prev_pos = to_eigen(prev_pose.pose.position);
@@ -540,8 +544,9 @@ namespace balloon_planner
         next_pos = to_eigen(next_pose.pose.position);
         dlen_cur = (next_pos - prev_pos).norm();
       }
-      const vec3_t cur_pt = prev_pos + dlen_remaining*(next_pos - prev_pos);
+      const vec3_t cur_pt = prev_pos + dlen_remaining*(next_pos - prev_pos)/dlen_cur;
       add_point_to_trajectory(cur_pt, ret);
+      dlen_remaining += dt*speed;
     }
     ret.header.frame_id = m_world_frame_id;
     ret.header.stamp = ros::Time::now();
@@ -814,7 +819,6 @@ namespace balloon_planner
     const double planning_period = pl.load_param2<double>("planning_period");
 
     pl.load_param("world_frame_id", m_world_frame_id);
-    pl.load_param("uav_frame_id", m_uav_frame_id);
     pl.load_param("max_unseen_time", m_max_unseen_time);
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
@@ -843,10 +847,9 @@ namespace balloon_planner
 
     m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
     mrs_lib::SubscribeMgr smgr(nh);
-    constexpr bool time_consistent = true;
-    m_sh_ball_detection = smgr.create_handler<geometry_msgs::PoseWithCovarianceStamped, time_consistent>("ball_filtered", ros::Duration(5.0));
-    m_sh_ball_prediction = smgr.create_handler<balloon_filter::BallPrediction, time_consistent>("ball_prediction", ros::Duration(5.0));
-    /* m_sh_fitted_plane = smgr.create_handler<balloon_filter::Plane, time_consistent>("ball_fitted_plane", ros::Duration(5.0)); */
+    m_sh_ball_detection = smgr.create_handler<geometry_msgs::PoseWithCovarianceStamped>("ball_filtered", ros::Duration(5.0));
+    m_sh_ball_prediction = smgr.create_handler<balloon_filter::BallPrediction>("ball_prediction", ros::Duration(5.0));
+    m_sh_cmd_odom = smgr.create_handler<nav_msgs::Odometry>("cmd_odom", ros::Duration(5.0));
 
     //}
 

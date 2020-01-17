@@ -98,7 +98,6 @@ namespace balloon_planner
 
       /* Parameters, loaded from ROS //{ */
       std::string m_world_frame_id;
-      std::string m_uav_frame_id;
 
       double m_approach_speed;
       double m_chase_speed;
@@ -121,6 +120,7 @@ namespace balloon_planner
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
       mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
       mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
+      mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_cmd_odom;
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
