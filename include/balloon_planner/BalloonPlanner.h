@@ -56,6 +56,7 @@ namespace balloon_planner
   using drcfg_t = balloon_planner::PlanningParamsConfig;
   using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
 
+  using vec2_t = Eigen::Vector2d;
   using vec3_t = Eigen::Vector3d;
   using vec4_t = Eigen::Vector4d;
   using quat_t = Eigen::Quaterniond;
@@ -111,6 +112,12 @@ namespace balloon_planner
       double m_target_offset;
       double m_catch_trigger_distance;
 
+      double m_pid_kP;
+      double m_pid_kI;
+      double m_pid_kD;
+      double m_pid_max_I;
+      ros::Duration m_pid_reset_duration;
+
       //}
 
       /* ROS related variables (subscribers, timers etc.) //{ */
@@ -145,12 +152,16 @@ namespace balloon_planner
       // |                helper implementation methods               |
       // --------------------------------------------------------------
 
+      std::optional<vec3_t> calc_ball_image_pos(const balloon_filter::BallLocation& ball_filtered);
+      double pid(const double error, const ros::Time& stamp);
+
       vec3_t calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance = 1e-9);
 
       std::optional<Eigen::Affine3d> get_transform(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
+      std::optional<geometry_msgs::TransformStamped> get_transform_raw(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
       std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
-      std::optional<vec3_t> get_current_position();
-      std::optional<vec3_t> get_current_cmd_position();
+      std::optional<vec4_t> get_current_position();
+      std::optional<vec4_t> get_current_cmd_position();
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
