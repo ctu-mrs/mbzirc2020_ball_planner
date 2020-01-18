@@ -61,8 +61,8 @@ namespace balloon_planner
         add_point_to_trajectory(m_start_position, result_traj);
         m_pub_cmd_traj.publish(result_traj);
         
-        const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
-        if (m_sh_ball_detection->has_data() && time_since_last_pred_msg < ros::Duration(m_max_unseen_time))
+        const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
+        if (m_sh_ball_detection->has_data() && time_since_last_det_msg < ros::Duration(m_max_unseen_time))
         {
           ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
           m_state = state_enum::following_detection;
@@ -82,7 +82,7 @@ namespace balloon_planner
           const vec3_t cur_cmd_pos = cur_cmd_pos_opt.value();
           const auto ball_filtered = *(m_sh_ball_detection->get_data());
           const auto cur_stamp = ros::Time::now();
-          const vec3_t ball_pos(ball_filtered.pose.pose.position.x, ball_filtered.pose.pose.position.y, ball_filtered.pose.pose.position.z);
+          const vec3_t ball_pos(ball_filtered.detection.pose.position.x, ball_filtered.detection.pose.position.y, ball_filtered.detection.pose.position.z);
           const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
           const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
           const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
@@ -148,8 +148,8 @@ namespace balloon_planner
           else
           {
             // if the flow gets here, then ball_prediction.predicted_path.poses has at least one element
-            const auto ball_pos_ros = pred_path.poses.front();
-            const vec3_t ball_pos(ball_pos_ros.pose.position.x, ball_pos_ros.pose.position.y, ball_pos_ros.pose.position.z);
+            const auto ball_pos_ros = pred_path.poses.front().pose.position;
+            const vec3_t ball_pos(ball_pos_ros.x, ball_pos_ros.y, ball_pos_ros.z);
             const double ball_expected_speed = ball_prediction.filter_state.expected_speed;
 
             auto follow_traj_pre = sample_trajectory_between_pts(cur_cmd_pos, ball_pos, m_approach_speed, m_trajectory_sampling_dt);
@@ -182,8 +182,8 @@ namespace balloon_planner
         auto cur_main_pos_opt = get_current_position();
         if (ukf_valid && m_sh_ball_detection->new_data() && cur_main_pos_opt.has_value())
         {
-          const auto ball_pos_ros = *m_sh_ball_detection->get_data();
-          const vec3_t ball_pos(ball_pos_ros.pose.pose.position.x, ball_pos_ros.pose.pose.position.y, ball_pos_ros.pose.pose.position.z);
+          const auto ball_pos_ros = m_sh_ball_detection->get_data()->detection.pose.position;
+          const vec3_t ball_pos(ball_pos_ros.x, ball_pos_ros.y, ball_pos_ros.z);
           const double ball_det_dist = (cur_main_pos_opt.value() - ball_pos).norm();
           if (ball_det_dist < m_catch_trigger_distance)
           {
@@ -225,8 +225,8 @@ namespace balloon_planner
           else
           {
             // if the flow gets here, then ball_prediction.predicted_path.poses has at least one element
-            const auto ball_pos_ros = pred_path.poses.front();
-            const vec3_t ball_pos(ball_pos_ros.pose.position.x, ball_pos_ros.pose.position.y, ball_pos_ros.pose.position.z);
+            const auto ball_pos_ros = pred_path.poses.front().pose.position;
+            const vec3_t ball_pos(ball_pos_ros.x, ball_pos_ros.y, ball_pos_ros.z);
             const double ball_expected_speed = ball_prediction.filter_state.expected_speed;
 
             const int n_pts = m_max_pts;
@@ -866,7 +866,7 @@ namespace balloon_planner
 
     m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
     mrs_lib::SubscribeMgr smgr(nh);
-    m_sh_ball_detection = smgr.create_handler<geometry_msgs::PoseWithCovarianceStamped>("ball_filtered", ros::Duration(5.0));
+    m_sh_ball_detection = smgr.create_handler<balloon_filter::BallLocation>("ball_filtered", ros::Duration(5.0));
     m_sh_ball_prediction = smgr.create_handler<balloon_filter::BallPrediction>("ball_prediction", ros::Duration(5.0));
     m_sh_cmd_odom = smgr.create_handler<nav_msgs::Odometry>("cmd_odom", ros::Duration(5.0));
     m_sh_main_odom = smgr.create_handler<nav_msgs::Odometry>("main_odom", ros::Duration(5.0));

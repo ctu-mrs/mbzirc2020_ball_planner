@@ -40,6 +40,7 @@
 #include <mutex>
 
 // local includes
+#include <balloon_filter/BallLocation.h>
 #include <balloon_filter/BallPrediction.h>
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_planner/ResetChosen.h>
@@ -116,7 +117,7 @@ namespace balloon_planner
       std::unique_ptr<drmgr_t> m_drmgr_ptr;
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-      mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
+      mrs_lib::SubscribeHandlerPtr<balloon_filter::BallLocation> m_sh_ball_detection;
       mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_cmd_odom;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_main_odom;
