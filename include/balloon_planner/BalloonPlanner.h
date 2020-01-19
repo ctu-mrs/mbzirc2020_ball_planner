@@ -170,6 +170,7 @@ namespace balloon_planner
       traj_t sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts);
       traj_t sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
+      traj_t orient_trajectory_yaw(const traj_t& traj, const vec3_t& to_point);
       traj_t orient_trajectory_yaw_observe(const traj_t& traj, const path_t& to_path);
       traj_t orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path);
       static vec3_t limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts);
