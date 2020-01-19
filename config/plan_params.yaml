@@ -1,14 +1,14 @@
 planning_period: 0.01 # seconds
 # path_offset: 2.5 # metres
 max_unseen_time: 5.0 # seconds
-approach_speed: 8.0 # metres per second
-chase_speed: 10.0 # metres per second
+approach_speed: 5.0 # metres per second
+chase_speed: 5.0 # metres per second
 catch_trigger_distance: 2.5 # metres
 
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_offset: 4.0 # metres
+  target_offset: 2.0 # metres
 
 z_bounds:
   min: 0.0
@@ -25,6 +25,6 @@ start_position:
   [
     0.0,   # x coordinate (metres)
     -25.0,  # y coordinate (metres)
-    8.0,   # z coordinate (metres)
+    5.0,   # z coordinate (metres)
     -0.2    # yaw (radians)
   ]

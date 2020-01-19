@@ -106,6 +106,11 @@ namespace balloon_planner
             auto follow_traj = sample_trajectory_between_pts(cur_cmd_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, yaw);
             const auto follow_traj_duration = trajectory_duration(follow_traj.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_DETECTION]: Follow trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
+
+            follow_traj.header.frame_id = m_world_frame_id;
+            follow_traj.header.stamp = ros::Time::now();
+            follow_traj.use_yaw = true;
+            follow_traj.fly_now = true;
   
             m_pub_cmd_traj.publish(follow_traj);
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
@@ -114,15 +119,15 @@ namespace balloon_planner
           }
         }
 
-        /* /1* check if some prediction is available and if so, change the state //{ *1/ */
+        /* check if some prediction is available and if so, change the state //{ */
         
-        /* if (lkf_valid || ukf_valid) */
-        /* { */
-        /*   ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Got a prediction, changing state to following prediction!"); */
-        /*   m_state = state_enum::following_prediction; */
-        /* } */
+        if (lkf_valid || ukf_valid)
+        {
+          ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Got a prediction, changing state to following prediction!");
+          m_state = state_enum::following_prediction;
+        }
         
-        /* //} */
+        //}
 
         /* check time since last detection message and abort if it's been too long //{ */
         
