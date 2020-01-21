@@ -8,8 +8,8 @@ catch_trigger_distance: 2.5 # metres
 lurking:
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
-  max_reposition: 2 # metres
-  min_follow_duration: 4.0 # seconds
+  max_reposition: 0.2 # metres
+  min_follow_duration: 8.0 # seconds
   min_points: 25
 
 trajectory:

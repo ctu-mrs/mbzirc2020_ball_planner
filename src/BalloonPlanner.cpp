@@ -71,6 +71,14 @@ namespace balloon_planner
       ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m.");
     }
 
+    if (m_pub_dbg_ball_positions.getNumSubscribers())
+    {
+      std_msgs::Header header;
+      header.frame_id = m_world_frame_id;
+      header.stamp = ros::Time::now();
+      m_pub_dbg_ball_positions.publish(to_output_message(m_ball_positions, header));
+    }
+
     switch (m_state)
     {
       case state_enum::waiting_for_detection:
@@ -92,6 +100,7 @@ namespace balloon_planner
         {
           ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
           m_following_start = ros::Time::now();
+          m_ball_positions.clear();
           m_state = state_enum::following_detection;
         }
         
@@ -152,7 +161,7 @@ namespace balloon_planner
         if (following_dur >= m_lurking_min_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
         {
           ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Following duration fulfilled, changing state to chasing prediction!");
-          m_state = state_enum::lurking;
+          m_state = state_enum::going_to_lurk;
         }
         
         //}
@@ -193,25 +202,27 @@ namespace balloon_planner
           }
           else
           {
+            std_msgs::Header header;
+            header.frame_id = m_world_frame_id;
+            header.stamp = cur_time;
             // if the flow gets here, then ball_prediction.predicted_path.poses has at least one element
             const auto ball_pos_ros = pred_path.poses.front().pose.position;
             const vec3_t ball_pos(ball_pos_ros.x, ball_pos_ros.y, ball_pos_ros.z);
             const double ball_expected_speed = ball_prediction.filter_state.expected_speed;
         
-            auto follow_traj_pre = sample_trajectory_between_pts(cur_cmd_pos, ball_pos, m_approach_speed, m_trajectory_sampling_dt);
+            auto follow_traj_pre = sample_trajectory_between_pts(cur_cmd_pos, ball_pos, m_approach_speed, m_trajectory_sampling_dt, 0.0, header);
             const auto follow_traj_pre_duration = trajectory_duration(follow_traj_pre.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Approach trajectory: " << follow_traj_pre_duration.toSec() << "s, " << follow_traj_pre.points.size() << "pts");
             follow_traj_pre = orient_trajectory_yaw_observe(follow_traj_pre, pred_path);
         
             const int n_pts = m_max_pts - follow_traj_pre.points.size();
-            auto follow_traj_post = sample_trajectory_from_path(pred_path, m_trajectory_sampling_dt, ball_expected_speed, n_pts);
+            auto follow_traj_post = sample_trajectory_from_path(pred_path, m_trajectory_sampling_dt, ball_expected_speed, n_pts, header);
             const auto follow_traj_post_duration = trajectory_duration(follow_traj_post.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Chase trajectory: " << follow_traj_post_duration.toSec() << "s, " << follow_traj_post.points.size() << "pts");
             follow_traj_post = orient_trajectory_yaw_speed(follow_traj_post, pred_path);
         
             traj_t total_traj = join_trajectories(follow_traj_pre, follow_traj_post);
-            total_traj.header.frame_id = m_world_frame_id;
-            total_traj.header.stamp = cur_time;
+            total_traj.header = header;
             total_traj.use_yaw = true;
             total_traj.fly_now = true;
         
@@ -243,7 +254,7 @@ namespace balloon_planner
         if (!lkf_valid && !ukf_valid)
         {
           ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Lost ball. Going back to start!");
-          m_state = state_enum::lurking;
+          m_state = state_enum::waiting_for_detection;
         }
         
         //}
@@ -257,11 +268,11 @@ namespace balloon_planner
         /*  //{ */
 
         {
-          const auto lurking_point = choose_lurking_point(m_ball_positions);
-          m_orig_lurk_point = lurking_point;
+          const auto lurking_pose = choose_lurking_pose(m_ball_positions);
+          m_orig_lurk_pose = lurking_pose;
 
           traj_t intercept_traj;
-          add_point_to_trajectory(lurking_point, intercept_traj);
+          add_point_to_trajectory(lurking_pose, intercept_traj);
           intercept_traj.header.frame_id = m_world_frame_id;
           intercept_traj.header.stamp = ros::Time::now();
           intercept_traj.use_yaw = true;
@@ -270,11 +281,20 @@ namespace balloon_planner
           if (m_pub_dbg_traj.getNumSubscribers() > 0)
             m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
 
-          ROS_INFO("[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f)", lurking_point.x(), lurking_point.y(), lurking_point.z(), lurking_point.w());
+          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f)", lurking_pose.x(), lurking_pose.y(), lurking_pose.z(), lurking_pose.w());
 
           // wait for the lurker to get into the lurking position
           if (m_sh_tracker_diags->has_data() && !m_sh_tracker_diags->get_data()->tracking_trajectory)
+          {
+            ROS_INFO("[GOING_TO_LURK]: At lurking spot, switching state to 'LURKING'.");
+            // reset detections and predictions
+            if (m_sh_ball_detection->new_data())
+              m_sh_ball_detection->get_data();
+            if (m_sh_ball_prediction->new_data())
+              m_sh_ball_prediction->get_data();
+            // move to the next state
             m_state = state_enum::lurking;
+          }
         }
 
         //}
@@ -329,15 +349,17 @@ namespace balloon_planner
           
           if (intercept_pos_opt.has_value())
           {
-            auto lurking_point = intercept_pos_opt.value();
+            auto lurking_pose = intercept_pos_opt.value();
+            const auto lurking_point = lurking_pose.block<3, 1>(0, 0);
             // limit the maximal reposition to m_lurking_max_reposition from the original lurk position
-            const auto reposition = lurking_point - m_orig_lurk_point.block<3, 1>(0, 0);
+            const auto reposition = lurking_point - m_orig_lurk_pose.block<3, 1>(0, 0);
             const auto repos_dist = reposition.norm();
+            ROS_INFO("[]: repos_dist: %.2f, max repos: %.2f", repos_dist, m_lurking_max_reposition);
             if (repos_dist > m_lurking_max_reposition)
-              lurking_point = lurking_point + reposition/repos_dist*m_lurking_max_reposition;
+              lurking_pose.block<3, 1>(0, 0) = m_orig_lurk_pose.block<3, 1>(0, 0) + reposition/repos_dist*m_lurking_max_reposition;
           
             traj_t intercept_traj;
-            add_point_to_trajectory(lurking_point, intercept_traj);
+            add_point_to_trajectory(lurking_pose, intercept_traj);
             intercept_traj.header.frame_id = m_world_frame_id;
             intercept_traj.header.stamp = cur_time;
             intercept_traj.use_yaw = true;
@@ -346,7 +368,8 @@ namespace balloon_planner
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
               m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
           
-            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f)", lurking_point.x(), lurking_point.y(), lurking_point.z(), lurking_point.w());
+            const auto repos_dist2 = (lurking_pose.block<3, 1>(0, 0) - m_orig_lurk_pose.block<3, 1>(0, 0)).norm();
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f) - %.2fm from orig. lurk point", lurking_pose.x(), lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist2);
           }
           
           //}
@@ -363,8 +386,8 @@ namespace balloon_planner
   // |                       Helper methods                       |
   // --------------------------------------------------------------
 
-    /* choose_lurking_point() method //{ */
-    vec4_t BalloonPlanner::choose_lurking_point(const std::vector<vec3_t>& ball_positions)
+    /* choose_lurking_pose() method //{ */
+    vec4_t BalloonPlanner::choose_lurking_pose(const std::vector<vec3_t>& ball_positions)
     {
       assert(ball_positions.size() > 1);
 
@@ -383,6 +406,17 @@ namespace balloon_planner
       const vec3_t lurk_dir = observe_pos - lurk_pos;
       const double lurk_yaw = std::atan2(lurk_dir.y(), lurk_dir.x());
       const vec4_t lurk_pose(lurk_pos.x(), lurk_pos.y(), lurk_pos.z(), lurk_yaw);
+
+
+      if (m_pub_dbg_lurking_points.getNumSubscribers())
+      {
+        std_msgs::Header header;
+        header.frame_id = m_world_frame_id;
+        header.stamp = ros::Time::now();
+        std::vector<vec3_t> lurk_pts {observe_pos, lurk_pos};
+        m_pub_dbg_lurking_points.publish(to_output_message(lurk_pts, header));
+      }
+
       return lurk_pose;
     }
     //}
@@ -676,7 +710,8 @@ namespace balloon_planner
 
   /* sample_trajectory_between_pts() method //{ */
   traj_t BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed,
-                                                                                  const double dt, const double yaw)
+                                                                                  const double dt, const double yaw,
+                                                                                  const std_msgs::Header& header)
   {
     assert(speed > 0.0);
     assert(dt > 0.0);
@@ -699,16 +734,13 @@ namespace balloon_planner
       /* add_point_to_path(cur_pt, cur_stamp, ret); */
     }
 
-    ret.header.frame_id = m_world_frame_id;
-    ret.header.stamp = ros::Time::now();
-    m_pub_dbg_approach_traj.publish(traj_to_path(ret, dt));
-
+    ret.header = header;
     return ret;
   }
   //}
 
   /* sample_trajectory_from_path() method //{ */
-  traj_t BalloonPlanner::sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts)
+  traj_t BalloonPlanner::sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts, const std_msgs::Header& header)
   {
     assert(!path.poses.empty());
     traj_t ret;
@@ -746,10 +778,8 @@ namespace balloon_planner
       add_point_to_trajectory(cur_pt, ret);
       dlen_remaining += dt*speed;
     }
-    ret.header.frame_id = m_world_frame_id;
-    ret.header.stamp = ros::Time::now();
-    m_pub_dbg_follow_traj.publish(traj_to_path(ret, dt));
 
+    ret.header = header;
     return ret;
   }
   //}
@@ -786,24 +816,11 @@ namespace balloon_planner
         next_pose = path.poses.at(next_pose_it);
       }
 
-      if (it == 0)
-      {
-        m_pub_dbg_path_pose1.publish(prev_pose);
-        m_pub_dbg_path_pose2.publish(next_pose);
-
-        /*       ROS_INFO_STREAM("cur_stamp: " << std::endl << cur_stamp); */
-        /*       ROS_INFO_STREAM("prev_pose: " << std::endl << prev_pose); */
-        /*       ROS_INFO_STREAM("next_pose: " << std::endl << next_pose); */
-      }
-
       const auto cur_pt = linear_interpolation(cur_stamp, prev_pose, next_pose);
       add_point_to_trajectory(cur_pt, ret);
 
       cur_stamp += dt_dur;
     }
-    ret.header.frame_id = m_world_frame_id;
-    ret.header.stamp = ros::Time::now();
-    m_pub_dbg_follow_traj.publish(traj_to_path(ret, dt));
 
     return ret;
   }
@@ -1011,6 +1028,39 @@ namespace balloon_planner
   }
   //}
 
+  /* to_output_message() method //{ */
+  sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<vec3_t>& points, const std_msgs::Header& header)
+  {
+    const size_t n_pts = points.size();
+    sensor_msgs::PointCloud2 ret;
+    ret.header = header;
+    ret.height = 1;
+    ret.width = n_pts;
+
+    {
+      // Prepare the PointCloud2
+      sensor_msgs::PointCloud2Modifier modifier(ret);
+      modifier.setPointCloud2FieldsByString(1, "xyz");
+      modifier.resize(n_pts);
+    }
+
+    {
+      // Fill the PointCloud2
+      sensor_msgs::PointCloud2Iterator<float> iter_x(ret, "x");
+      sensor_msgs::PointCloud2Iterator<float> iter_y(ret, "y");
+      sensor_msgs::PointCloud2Iterator<float> iter_z(ret, "z");
+      for (size_t it = 0; it < n_pts; it++, ++iter_x, ++iter_y, ++iter_z)
+      {
+        *iter_x = points.at(it).x();
+        *iter_y = points.at(it).y();
+        *iter_z = points.at(it).z();
+      }
+    }
+
+    return ret;
+  }
+  //}
+
   /* onInit() //{ */
 
   void BalloonPlanner::onInit()
@@ -1074,12 +1124,8 @@ namespace balloon_planner
 
     m_pub_cmd_traj = nh.advertise<mrs_msgs::TrackerTrajectory>("commanded_trajectory", 1);
     m_pub_dbg_traj = nh.advertise<nav_msgs::Path>("debug_trajectory", 1);
-    m_pub_dbg_approach_traj = nh.advertise<nav_msgs::Path>("debug_approach_trajectory", 1);
-    m_pub_dbg_follow_traj = nh.advertise<nav_msgs::Path>("debug_follow_trajectory", 1);
-    m_pub_dbg_approach_pt = nh.advertise<geometry_msgs::PointStamped>("debug_approach_point", 1);
-    m_pub_dbg_path_pose1 = nh.advertise<geometry_msgs::PoseStamped>("debug_path_pose1", 1);
-    m_pub_dbg_path_pose2 = nh.advertise<geometry_msgs::PoseStamped>("debug_path_pose2", 1);
-    m_pub_dbg_observe_cone = nh.advertise<sensor_msgs::Range>("debig_observe_cone", 1);
+    m_pub_dbg_ball_positions = nh.advertise<sensor_msgs::PointCloud2>("ball_positions", 1);
+    m_pub_dbg_lurking_points = nh.advertise<sensor_msgs::PointCloud2>("lurking_points", 1, true);
 
     //}
 

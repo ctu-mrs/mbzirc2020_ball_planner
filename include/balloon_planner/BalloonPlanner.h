@@ -146,12 +146,8 @@ namespace balloon_planner
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
-      ros::Publisher m_pub_dbg_approach_traj;
-      ros::Publisher m_pub_dbg_follow_traj;
-      ros::Publisher m_pub_dbg_approach_pt;
-      ros::Publisher m_pub_dbg_path_pose1;
-      ros::Publisher m_pub_dbg_path_pose2;
-      ros::Publisher m_pub_dbg_observe_cone;
+      ros::Publisher m_pub_dbg_ball_positions;
+      ros::Publisher m_pub_dbg_lurking_points;
 
       ros::Timer m_main_loop_timer;
       //}
@@ -163,7 +159,7 @@ namespace balloon_planner
       double m_path_offset;
       ros::Time m_following_start;
       std::vector<vec3_t> m_ball_positions;
-      vec4_t m_orig_lurk_point;
+      vec4_t m_orig_lurk_pose;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
@@ -180,15 +176,15 @@ namespace balloon_planner
       std::optional<vec4_t> get_current_position();
       std::optional<vec4_t> get_current_cmd_position();
 
-      vec4_t choose_lurking_point(const std::vector<vec3_t>& ball_positions);
+      vec4_t choose_lurking_pose(const std::vector<vec3_t>& ball_positions);
       plane_t get_yz_plane(const vec3_t& pos, const double yaw);
       vec3_t path_plane_intersection(const path_t& path, const plane_t& plane);
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
       ros::Duration trajectory_duration(const int n_traj_pts, const double dt);
-      traj_t sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw = 0.0);
-      traj_t sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts);
+      traj_t sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw = 0.0, const std_msgs::Header& header = {});
+      traj_t sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts, const std_msgs::Header& header = {});
       traj_t sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts);
       traj_t join_trajectories(const traj_t& traj1, const traj_t& traj2);
       traj_t orient_trajectory_yaw(const traj_t& traj, const vec3_t& to_point);
@@ -196,6 +192,7 @@ namespace balloon_planner
       traj_t orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path);
       static vec3_t limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts);
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
+      sensor_msgs::PointCloud2 to_output_message(const std::vector<vec3_t>& points, const std_msgs::Header& header);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
       traj_t path_to_traj(const path_t& path);
