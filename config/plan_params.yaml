@@ -5,6 +5,13 @@ approach_speed: 5.0 # metres per second
 chase_speed: 5.0 # metres per second
 catch_trigger_distance: 2.5 # metres
 
+lurking:
+  observe_dist: 5 # metres
+  max_dist_from_trajectory: 5 # metres
+  max_reposition: 2 # metres
+  min_follow_duration: 4.0 # seconds
+  min_points: 25
+
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds

@@ -24,6 +24,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/Range.h>
+#include <mrs_msgs/MpcTrackerDiagnostics.h>
 
 // MRS stuff
 #include <mrs_lib/Profiler.h>
@@ -70,10 +71,17 @@ namespace balloon_planner
       waiting_for_detection,
       following_detection,
       following_prediction,
-      chasing_prediction,
+      going_to_lurk,
+      lurking,
     };
   }
   using state_t = state_enum::state_t;
+
+  struct plane_t
+  {
+    vec3_t point;
+    vec3_t normal;
+  };
 
   /* //{ class BalloonPlanner */
 
@@ -112,6 +120,12 @@ namespace balloon_planner
       double m_target_offset;
       double m_catch_trigger_distance;
 
+      int m_lurking_min_pts;
+      ros::Duration m_lurking_min_dur;
+      double m_lurking_observe_dist;
+      double m_lurking_max_dist_from_trajectory;
+      double m_lurking_max_reposition;
+
       double m_pid_kP;
       double m_pid_kI;
       double m_pid_kD;
@@ -128,6 +142,7 @@ namespace balloon_planner
       mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_cmd_odom;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_main_odom;
+      mrs_lib::SubscribeHandlerPtr<mrs_msgs::MpcTrackerDiagnostics> m_sh_tracker_diags;
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
@@ -146,7 +161,9 @@ namespace balloon_planner
     private:
       state_t m_state;
       double m_path_offset;
-      ros::Time m_prev_plan_stamp;
+      ros::Time m_following_start;
+      std::vector<vec3_t> m_ball_positions;
+      vec4_t m_orig_lurk_point;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
@@ -162,6 +179,10 @@ namespace balloon_planner
       std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
       std::optional<vec4_t> get_current_position();
       std::optional<vec4_t> get_current_cmd_position();
+
+      vec4_t choose_lurking_point(const std::vector<vec3_t>& ball_positions);
+      plane_t get_yz_plane(const vec3_t& pos, const double yaw);
+      vec3_t path_plane_intersection(const path_t& path, const plane_t& plane);
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);
