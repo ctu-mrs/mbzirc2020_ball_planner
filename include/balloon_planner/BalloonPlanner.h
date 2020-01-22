@@ -44,7 +44,7 @@
 #include <balloon_filter/BallLocation.h>
 #include <balloon_filter/BallPrediction.h>
 #include <balloon_planner/PlanningParamsConfig.h>
-#include <balloon_planner/ResetChosen.h>
+#include <balloon_filter/ResetEstimates.h>
 #include <mrs_msgs/TrackerTrajectory.h>
 
 //}
@@ -149,6 +149,8 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_ball_positions;
       ros::Publisher m_pub_dbg_lurking_points;
 
+      ros::ServiceClient m_srv_reset_filter;
+
       ros::Timer m_main_loop_timer;
       //}
 
@@ -164,6 +166,8 @@ namespace balloon_planner
       // --------------------------------------------------------------
       // |                helper implementation methods               |
       // --------------------------------------------------------------
+
+      void reset_filter();
 
       std::optional<vec3_t> calc_ball_image_pos(const balloon_filter::BallLocation& ball_filtered);
       double pid(const double error, const ros::Time& stamp);

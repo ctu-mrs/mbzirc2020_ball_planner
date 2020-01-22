@@ -287,6 +287,7 @@ namespace balloon_planner
           if (m_sh_tracker_diags->has_data() && !m_sh_tracker_diags->get_data()->tracking_trajectory)
           {
             ROS_INFO("[GOING_TO_LURK]: At lurking spot, switching state to 'LURKING'.");
+            reset_filter();
             // reset detections and predictions
             if (m_sh_ball_detection->new_data())
               m_sh_ball_detection->get_data();
@@ -354,7 +355,7 @@ namespace balloon_planner
             // limit the maximal reposition to m_lurking_max_reposition from the original lurk position
             const auto reposition = lurking_point - m_orig_lurk_pose.block<3, 1>(0, 0);
             const auto repos_dist = reposition.norm();
-            ROS_INFO("[]: repos_dist: %.2f, max repos: %.2f", repos_dist, m_lurking_max_reposition);
+            /* ROS_INFO("[]: repos_dist: %.2f, max repos: %.2f", repos_dist, m_lurking_max_reposition); */
             if (repos_dist > m_lurking_max_reposition)
               lurking_pose.block<3, 1>(0, 0) = m_orig_lurk_pose.block<3, 1>(0, 0) + reposition/repos_dist*m_lurking_max_reposition;
           
@@ -385,6 +386,18 @@ namespace balloon_planner
   // --------------------------------------------------------------
   // |                       Helper methods                       |
   // --------------------------------------------------------------
+
+    /* reset_filter() method //{ */
+    void BalloonPlanner::reset_filter()
+    {
+      balloon_filter::ResetEstimatesRequest req;
+      balloon_filter::ResetEstimatesResponse res;
+      if (m_srv_reset_filter.call(req, res))
+        ROS_INFO("Filter response: %s", res.message.c_str());
+      else
+        ROS_ERROR("Failed to call service to reset the filter!");
+    }
+    //}
 
     /* choose_lurking_pose() method //{ */
     vec4_t BalloonPlanner::choose_lurking_pose(const std::vector<vec3_t>& ball_positions)
@@ -1127,6 +1140,12 @@ namespace balloon_planner
     m_pub_dbg_ball_positions = nh.advertise<sensor_msgs::PointCloud2>("ball_positions", 1);
     m_pub_dbg_lurking_points = nh.advertise<sensor_msgs::PointCloud2>("lurking_points", 1, true);
 
+    //}
+
+    /* services //{ */
+    
+    m_srv_reset_filter = nh.serviceClient<balloon_filter::ResetEstimates>("reset_balloon_filter");
+    
     //}
 
     /* profiler //{ */
