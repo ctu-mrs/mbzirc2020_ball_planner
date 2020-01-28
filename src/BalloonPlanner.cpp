@@ -61,25 +61,27 @@ namespace balloon_planner
     }
 
     const auto cur_pos_yaw_opt = get_current_position();
+    /* set constraints, set last seen yaw etc. according to ball position if available //{ */
+    
     if (m_sh_ball_detection->new_data() && cur_pos_yaw_opt.has_value())
     {
       const auto ball_filtered = *(m_sh_ball_detection->peek_data());
       const vec3_t ball_pos(ball_filtered.detection.pose.position.x, ball_filtered.detection.pose.position.y, ball_filtered.detection.pose.position.z);
       const vec4_t& cur_pos_yaw = cur_pos_yaw_opt.value();
       const vec3_t& cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
-      const double ball_dist = (cur_pos - ball_pos).norm();
+      const double& cur_yaw = cur_pos_yaw.w();
+      const vec3_t ball_dir = cur_pos - ball_pos;
+
+      const double ball_relative_yaw = mrs_lib::normalize_angle(std::atan2(ball_dir.y(), ball_dir.x()) - cur_yaw);
+      m_last_seen_relative_yaw = ball_relative_yaw;
+
+      const double ball_dist = ball_dir.norm();
       const auto desired_constraints = pick_constraints(ball_dist);
-      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m, setting '" << desired_constraints << "' constraints.");
+      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m at " << ball_relative_yaw << " relative yaw, setting '" << desired_constraints << "' constraints.");
       set_constraints(desired_constraints);
     }
-
-    if (m_pub_dbg_ball_positions.getNumSubscribers())
-    {
-      std_msgs::Header header;
-      header.frame_id = m_world_frame_id;
-      header.stamp = ros::Time::now();
-      m_pub_dbg_ball_positions.publish(to_output_message(m_ball_positions, header));
-    }
+    
+    //}
 
     switch (m_state)
     {
@@ -98,7 +100,7 @@ namespace balloon_planner
         m_pub_cmd_traj.publish(result_traj);
         
         const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
-        if (m_sh_ball_detection->has_data() && time_since_last_det_msg < ros::Duration(m_max_unseen_time))
+        if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
         {
           ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
           m_following_start = ros::Time::now();
@@ -106,6 +108,63 @@ namespace balloon_planner
           m_state = state_enum::following_detection;
         }
         
+        //}
+      }
+      break;
+      case state_enum::lost_glancing:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'LOST_GLANCING'");
+        /*  //{ */
+
+        /* the main action //{ */
+        
+        const auto cur_cmd_pos_yaw_opt = get_current_cmd_position();
+        if (m_sh_ball_detection->new_data() && cur_cmd_pos_yaw_opt.has_value())
+        {
+          vec4_t cur_pos_yaw = cur_cmd_pos_yaw_opt.value();
+          traj_t glance_traj;
+          for (size_t it = 0; it < m_max_pts; it++)
+          {
+            cur_pos_yaw.w() += m_trajectory_sampling_dt*m_glancing_yaw_rate;
+            add_point_to_trajectory(cur_pos_yaw, glance_traj);
+          }
+
+          glance_traj.header.frame_id = m_world_frame_id;
+          glance_traj.header.stamp = ros::Time::now();
+          glance_traj.use_yaw = true;
+          glance_traj.fly_now = true;
+      
+          m_pub_cmd_traj.publish(glance_traj);
+          if (m_pub_dbg_traj.getNumSubscribers() > 0)
+            m_pub_dbg_traj.publish(traj_to_path(glance_traj, m_trajectory_sampling_dt));
+        }
+        
+        //}
+
+        const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
+
+        /* check if we've seen the ball again and resume huntung if possible //{ */
+        
+        if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
+        {
+          ROS_WARN_STREAM("[LOST_GLANCING]: Saw the ball, continuing!");
+          m_following_start = ros::Time::now();
+          m_ball_positions.clear();
+          m_state = state_enum::following_detection;
+        }
+        
+        //}
+
+        /* check time since last detection message and abort if it's been too long //{ */
+        
+        if (m_sh_ball_detection->has_data() && time_since_last_det_msg > m_max_unseen_dur + m_glancing_dur)
+        {
+          ROS_WARN_STREAM("[LOST_GLANCING]: Lost ball. Going back to start!");
+          m_state = state_enum::waiting_for_detection;
+        }
+        
+        //}
+
         //}
       }
       break;
@@ -171,8 +230,8 @@ namespace balloon_planner
         /* check time since last detection message and abort if it's been too long //{ */
         
         {
-          const auto time_since_last_pred_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
-          if (m_sh_ball_detection->has_data() && time_since_last_pred_msg > ros::Duration(m_max_unseen_time))
+          const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
+          if (m_sh_ball_detection->has_data() && time_since_last_det_msg > m_max_unseen_dur)
           {
             ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Lost ball. Going back to start!");
             m_state = state_enum::waiting_for_detection;
@@ -382,6 +441,18 @@ namespace balloon_planner
       }
       break;
     }
+
+    /* publish remembered ball positions for debugging //{ */
+    
+    if (m_pub_dbg_ball_positions.getNumSubscribers())
+    {
+      std_msgs::Header header;
+      header.frame_id = m_world_frame_id;
+      header.stamp = ros::Time::now();
+      m_pub_dbg_ball_positions.publish(to_output_message(m_ball_positions, header));
+    }
+    
+    //}
   }
   //}
 
@@ -531,7 +602,6 @@ namespace balloon_planner
     m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
     m_approach_speed = cfg.approach_speed;
     m_chase_speed = cfg.chase_speed;
-    m_catch_trigger_distance = cfg.catch_trigger_distance;
   }
   //}
 
@@ -1067,7 +1137,9 @@ namespace balloon_planner
     const double planning_period = pl.load_param2<double>("planning_period");
 
     pl.load_param("world_frame_id", m_world_frame_id);
-    pl.load_param("max_unseen_time", m_max_unseen_time);
+    pl.load_param("max_unseen_duration", m_max_unseen_dur);
+    pl.load_param("glancing/duration", m_glancing_dur);
+    pl.load_param("glancing/yaw_rate", m_glancing_yaw_rate);
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
 

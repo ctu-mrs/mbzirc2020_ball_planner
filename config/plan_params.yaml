@@ -1,6 +1,11 @@
 planning_period: 0.01 # seconds
-# path_offset: 2.5 # metres
-max_unseen_time: 5.0 # seconds
+
+max_unseen_duration: 5.0 # seconds
+
+glancing:
+  yaw_rate: 1.57 # radians per second
+  duration: 1.0 # seconds
+
 approach_speed: 5.0 # metres per second
 chase_speed: 5.0 # metres per second
 catch_trigger_distance: 2.5 # metres
@@ -18,7 +23,7 @@ trajectory:
   target_offset: 2.0 # metres
 
 z_bounds:
-  min: 0.0
+  min: 3.0
   max: 20.0
 
 constraint_ranges:

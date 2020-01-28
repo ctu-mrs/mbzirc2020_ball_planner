@@ -70,6 +70,7 @@ namespace balloon_planner
     enum state_t
     {
       waiting_for_detection,
+      lost_glancing,
       following_detection,
       following_prediction,
       going_to_lurk,
@@ -112,14 +113,16 @@ namespace balloon_planner
 
       double m_approach_speed;
       double m_chase_speed;
-      double m_max_unseen_time;
+      ros::Duration m_max_unseen_dur;
+      
+      ros::Duration m_glancing_dur;
+      double m_glancing_yaw_rate;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
 
       vec4_t m_start_position;
       double m_target_offset;
-      double m_catch_trigger_distance;
 
       int m_lurking_min_pts;
       ros::Duration m_lurking_min_dur;
@@ -160,6 +163,7 @@ namespace balloon_planner
       ros::Time m_following_start;
       std::vector<vec3_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;
+      double m_last_seen_relative_yaw;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
