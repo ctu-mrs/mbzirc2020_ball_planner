@@ -25,6 +25,7 @@
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/Range.h>
 #include <mrs_msgs/MpcTrackerDiagnostics.h>
+#include <mrs_msgs/String.h>
 
 // MRS stuff
 #include <mrs_lib/Profiler.h>
@@ -126,11 +127,7 @@ namespace balloon_planner
       double m_lurking_max_dist_from_trajectory;
       double m_lurking_max_reposition;
 
-      double m_pid_kP;
-      double m_pid_kI;
-      double m_pid_kD;
-      double m_pid_max_I;
-      ros::Duration m_pid_reset_duration;
+      std::map<double, std::string> m_constraint_ranges;
 
       //}
 
@@ -150,6 +147,7 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_lurking_points;
 
       ros::ServiceClient m_srv_reset_filter;
+      ros::ServiceClient m_srv_set_constraints;
 
       ros::Timer m_main_loop_timer;
       //}
@@ -167,10 +165,9 @@ namespace balloon_planner
       // |                helper implementation methods               |
       // --------------------------------------------------------------
 
+      std::string pick_constraints(const double ball_dist);
+      void set_constraints(const std::string& constraints_name);
       void reset_filter();
-
-      std::optional<vec3_t> calc_ball_image_pos(const balloon_filter::BallLocation& ball_filtered);
-      double pid(const double error, const ros::Time& stamp);
 
       vec3_t calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance = 1e-9);
 

@@ -68,7 +68,9 @@ namespace balloon_planner
       const vec4_t& cur_pos_yaw = cur_pos_yaw_opt.value();
       const vec3_t& cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
       const double ball_dist = (cur_pos - ball_pos).norm();
-      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m.");
+      const auto desired_constraints = pick_constraints(ball_dist);
+      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m, setting '" << desired_constraints << "' constraints.");
+      set_constraints(desired_constraints);
     }
 
     if (m_pub_dbg_ball_positions.getNumSubscribers())
@@ -387,6 +389,34 @@ namespace balloon_planner
   // |                       Helper methods                       |
   // --------------------------------------------------------------
 
+    /* pick_constraints() method //{ */
+    std::string BalloonPlanner::pick_constraints(const double ball_dist)
+    {
+      assert(!m_constraint_ranges.empty());
+      auto prev_constraint = std::begin(m_constraint_ranges)->second;
+      for (const auto& keyval : m_constraint_ranges)
+      {
+        if (keyval.first > ball_dist)
+          return prev_constraint;
+        prev_constraint = keyval.second;
+      }
+      return prev_constraint;
+    }
+    //}
+
+    /* set_constraints() method //{ */
+    void BalloonPlanner::set_constraints(const std::string& constraints_name)
+    {
+      mrs_msgs::String::Request req;
+      mrs_msgs::String::Response res;
+      req.value = constraints_name;
+      if (m_srv_set_constraints.call(req, res))
+        ROS_INFO("Gain manager response: %s", res.message.c_str());
+      else
+        ROS_ERROR("Failed to call service to set the constraints!");
+    }
+    //}
+
     /* reset_filter() method //{ */
     void BalloonPlanner::reset_filter()
     {
@@ -493,58 +523,6 @@ namespace balloon_planner
   }
   //}
 
-  /* calc_ball_image_pos() method //{ */
-  std::optional<vec3_t> BalloonPlanner::calc_ball_image_pos(const balloon_filter::BallLocation& ball_filtered)
-  {
-    /* static image_geometry::PinholeCameraModel camera_model; */
-    /* camera_model.fromCameraInfo(ball_filtered.camera_info); */
-  
-    const auto tf_opt = get_transform(ball_filtered.header.frame_id, ball_filtered.camera_info.header.frame_id, ball_filtered.header.stamp);
-    if (!tf_opt.has_value())
-      return std::nullopt;
-    const vec3_t pt3d_det(ball_filtered.detection.pose.position.x, ball_filtered.detection.pose.position.y, ball_filtered.detection.pose.position.z);
-    const vec3_t pt3d_tfd = tf_opt.value()*pt3d_det;
-    /* geometry_msgs::Point ball_in_camera_frame; */
-    /* tf2::doTransform(ball_filtered.detection.pose.position, ball_in_camera_frame, tf_opt.value()); */
-  
-    /* const cv::Point3d cv_pt3d(ball_in_camera_frame.x, ball_in_camera_frame.y, ball_in_camera_frame.z); */
-    /* const cv::Point2d cv_pt2d = camera_model.project3dToPixel(cv_pt3d); */
-
-    /* const double im_width = ball_filtered.camera_info.width; */
-    /* const double im_height = ball_filtered.camera_info.height; */
-    // convert to range from -1 to 1, where -1 is left border, 0 is center and 1 is right border of the image (similarly for height)
-    /* const vec2_t pt2d(2.0*cv_pt2d.x/im_width-1.0, 2.0*cv_pt2d.y/im_height-1.0); */
-    /* return pt2d; */
-    /* const vec3_t pt3d(ball_in_camera_frame.x, ball_in_camera_frame.y, ball_in_camera_frame.z); */
-    return pt3d_tfd;
-  }
-  //}
-
-  /* pid() method //{ */
-  double BalloonPlanner::pid(const double error, const ros::Time& stamp)
-  {
-    static double prev_error = error;
-    static double error_I = 0.0;
-    static ros::Time prev_stamp = stamp;
-    const ros::Duration dt_dur = stamp - prev_stamp;
-    const double dt = dt_dur.toSec();
-    if (dt_dur > m_pid_reset_duration)
-    {
-      prev_error = error;
-      error_I = 0.0;
-    }
-  
-    const double error_D = dt == 0.0 ? 0.0 : (error - prev_error)/dt;
-    const double result = m_pid_kP*error + m_pid_kI*error_I + m_pid_kD*error_D;
-    ROS_INFO("[PID]: P: %.2f,\tI: %.2f,\tD: %.2f,\ty: %.2f", error, error_I, error_D, result);
-  
-    error_I += dt*error;
-    error_I = std::clamp(error_I, -m_pid_max_I, m_pid_max_I);
-    prev_error = error;
-    return result;
-  }
-  //}
-
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
@@ -554,12 +532,6 @@ namespace balloon_planner
     m_approach_speed = cfg.approach_speed;
     m_chase_speed = cfg.chase_speed;
     m_catch_trigger_distance = cfg.catch_trigger_distance;
-
-    m_pid_kP = cfg.pid__kP;
-    m_pid_kI = cfg.pid__kI;
-    m_pid_kD = cfg.pid__kD;
-    m_pid_max_I = cfg.pid__max_I;
-    m_pid_reset_duration = ros::Duration(cfg.pid__reset_duration);
   }
   //}
 
@@ -1105,6 +1077,23 @@ namespace balloon_planner
     pl.load_param("lurking/max_dist_from_trajectory", m_lurking_max_dist_from_trajectory);
     pl.load_param("lurking/max_reposition", m_lurking_max_reposition);
 
+    /* load and print constraint ranges //{ */
+    
+    const auto constraint_ranges_unsorted = pl.load_param2<std::map<std::string, double>>("constraint_ranges");
+    for (const auto& keyval : constraint_ranges_unsorted)
+      m_constraint_ranges.emplace(keyval.second, keyval.first);
+    ROS_INFO("[%s]: Sorted constraint ranges:", m_node_name.c_str());
+    std::cout << "{" <<std::endl;
+    double prev_dist = 0.0;
+    for (const auto& keyval : m_constraint_ranges)
+    {
+      std::cout << "\t" << prev_dist << "~" << keyval.first << ":\t" << keyval.second << std::endl;
+      prev_dist = keyval.first;
+    }
+    std::cout << "}" <<std::endl;
+    
+    //}
+
     pl.load_matrix_static<4, 1>("start_position", m_start_position);
 
     if (!pl.loaded_successfully())
@@ -1145,6 +1134,7 @@ namespace balloon_planner
     /* services //{ */
     
     m_srv_reset_filter = nh.serviceClient<balloon_filter::ResetEstimates>("reset_balloon_filter");
+    m_srv_set_constraints = nh.serviceClient<mrs_msgs::String>("set_constraints");
     
     //}
 
