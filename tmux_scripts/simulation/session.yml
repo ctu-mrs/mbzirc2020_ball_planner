@@ -2,7 +2,7 @@ name: simulation
 root: ./
 
 startup_window: takeoff
-pre_window: export UAV_NAME=uav1
+pre_window: export UAV_NAME=uav62; export RUN_TYPE=simulation; export WORLD_NAME=simulation_challenge1
 windows:
   - roscore:
       layout: even-vertical
@@ -16,19 +16,19 @@ windows:
   - spawn:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav1; waitForSimulation; spawn 1 --run --delete --enable-rangefinder --enable-ground-truth --enable-realsense-front
-        - export UAV_NAME=uav2; waitForSimulation; spawn 2 --run --delete --enable-rangefinder --enable-ground-truth --enable-ball-holder
+        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --run --delete --enable-rangefinder --enable-ground-truth --enable-realsense-front --file spawn62.csv
+        - export UAV_NAME=uav60; waitForSimulation; spawn 60 --run --delete --enable-rangefinder --enable-ground-truth --enable-ball-holder --file spawn60.csv
   - control:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml config_gain_manager:=custom_configs/gain_manager.yaml config_mpc_tracker:=custom_configs/mpc_tracker.yaml
-        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=custom_configs/constraint_manager.yaml config_uav_manager:=custom_configs/uav_manager.yaml config_gain_manager:=custom_configs/gain_manager.yaml config_mpc_tracker:=custom_configs/mpc_tracker.yaml
+        - export UAV_NAME=uav62; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
+        - export UAV_NAME=uav60; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
   - takeoff:
       layout: even-vertical
       panes:
         #{ uav1
         - '
-          export UAV_NAME=uav1; 
+          export UAV_NAME=uav62; 
           waitForControl;
           rosservice call /$UAV_NAME/mavros/cmd/arming 1;
           rosservice call /$UAV_NAME/control_manager/motors 1;
@@ -39,7 +39,7 @@ windows:
         #}
         #{ uav2
         - '
-          export UAV_NAME=uav2; 
+          export UAV_NAME=uav60; 
           waitForControl;
           rosservice call /$UAV_NAME/mavros/cmd/arming 1;
           rosservice call /$UAV_NAME/control_manager/motors 1;
@@ -54,9 +54,9 @@ windows:
         - '
           waitForControl;
           roslaunch balloon_filter generate_eight.launch;
-          roslaunch trajectory_loader multimaster_trajectories_loader.launch loop:=true;
+          roslaunch balloon_filter load_eight.launch loop:=true;
           sleep 15;
-          roslaunch trajectory_loader multimaster_start_following.launch;
+          roslaunch balloon_filter start_following_eight.launch;
           '
   - detector:
       layout: even-vertical

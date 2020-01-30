@@ -33,10 +33,10 @@ ballcatch_slow:
     snap: 10.0
   vertical:
     ascending:
-      speed: 2.0
-      acceleration: 2.0
+      speed: 5.0
+      acceleration: 3.0
       jerk: 5.0
-      snap: 3.0
+      snap: 10.0
     descending:
       speed: 2.0
       acceleration: 2.0
@@ -56,10 +56,10 @@ ballcatch_medium:
     snap: 10.0
   vertical:
     ascending:
-      speed: 2.0
-      acceleration: 2.0
+      speed: 5.0
+      acceleration: 3.0
       jerk: 5.0
-      snap: 3.0
+      snap: 10.0
     descending:
       speed: 2.0
       acceleration: 2.0
@@ -79,10 +79,10 @@ ballcatch_fast:
     snap: 10.0
   vertical:
     ascending:
-      speed: 2.0
-      acceleration: 2.0
+      speed: 5.0
+      acceleration: 3.0
       jerk: 5.0
-      snap: 3.0
+      snap: 10.0
     descending:
       speed: 2.0
       acceleration: 2.0

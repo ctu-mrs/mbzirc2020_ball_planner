@@ -13,7 +13,7 @@ fi
 
 source $HOME/.bashrc
 
-PROJECT_NAME=just_flying_balltraj
+PROJECT_NAME=ballcatcher
 
 MAIN_DIR=~/"bag_files"
 
@@ -32,13 +32,14 @@ input=(
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
 '
-  'TrajectoryLoader' '
-waitForControl;
-roslaunch balloon_filter generate_eight.launch;
-roslaunch trajectory_loader multimaster_trajectories_loader.launch loop:=true;
+  'Detector1' 'waitForControl; roslaunch object_detect object_detect.launch;
 '
-  'FlytToStart' 'roslaunch trajectory_loader multimaster_fly_to_start.launch'
-  'StartFollowing' 'roslaunch trajectory_loader multimaster_start_following.launch'
+  'Detector2' 'waitForControl; roslaunch object_detect object_detect_bfx.launch;
+'
+  'Filter' 'waitForControl; roslaunch balloon_filter filter_eightball.launch;
+'
+  'Plan' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
+'
   'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
   'Takeoff' 'rosservice call /'"$UAV_NAME"'/uav_manager/takeoff'
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'
