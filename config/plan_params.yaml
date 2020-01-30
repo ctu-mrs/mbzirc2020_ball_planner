@@ -1,21 +1,21 @@
 planning_period: 0.01 # seconds
 # path_offset: 2.5 # metres
 max_unseen_time: 5.0 # seconds
-approach_speed: 5.0 # metres per second
-chase_speed: 5.0 # metres per second
+approach_speed: 4.0 # metres per second
+chase_speed: 4.0 # metres per second
 catch_trigger_distance: 2.5 # metres
 
 lurking:
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
   max_reposition: 0.2 # metres
-  min_follow_duration: 8.0 # seconds
-  min_points: 25
+  min_follow_duration: 99999999.0 # seconds
+  min_points: 99999999
 
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_offset: 2.0 # metres
+  target_offset: 5.0 # metres
 
 z_bounds:
   min: 0.0
@@ -30,8 +30,8 @@ pid:
 
 start_position:
   [
-    0.0,   # x coordinate (metres)
-    -25.0,  # y coordinate (metres)
-    5.0,   # z coordinate (metres)
-    -0.2    # yaw (radians)
+    -30.0,   # x coordinate (metres)
+    0.0,  # y coordinate (metres)
+    7.5,   # z coordinate (metres)
+    -0.9    # yaw (radians)
   ]
