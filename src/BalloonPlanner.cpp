@@ -271,8 +271,13 @@ namespace balloon_planner
             const auto ball_pos_ros = pred_path.poses.front().pose.position;
             const vec3_t ball_pos(ball_pos_ros.x, ball_pos_ros.y, ball_pos_ros.z);
             const double ball_expected_speed = ball_prediction.filter_state.expected_speed;
+            const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
+            const vec3_t offset_vec = -m_target_offset*calc_horizontal_offset_vector(dir_vec);
+            const vec3_t tgt_pos = ball_pos + offset_vec;
         
-            auto follow_traj_pre = sample_trajectory_between_pts(cur_cmd_pos, ball_pos, m_approach_speed, m_trajectory_sampling_dt, 0.0, header);
+            auto follow_traj_pre1 = sample_trajectory_between_pts(cur_cmd_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, 0.0, header);
+            auto follow_traj_pre2 = sample_trajectory_between_pts(tgt_pos, ball_pos, ball_expected_speed, m_trajectory_sampling_dt, 0.0, header);
+            auto follow_traj_pre = join_trajectories(follow_traj_pre1, follow_traj_pre2);
             const auto follow_traj_pre_duration = trajectory_duration(follow_traj_pre.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Approach trajectory: " << follow_traj_pre_duration.toSec() << "s, " << follow_traj_pre.points.size() << "pts");
             follow_traj_pre = orient_trajectory_yaw_observe(follow_traj_pre, pred_path);
