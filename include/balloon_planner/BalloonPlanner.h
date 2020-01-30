@@ -69,8 +69,8 @@ namespace balloon_planner
   {
     enum state_t
     {
-      waiting_for_detection,
       lost_glancing,
+      waiting_for_detection,
       following_detection,
       following_prediction,
       going_to_lurk,
@@ -178,8 +178,13 @@ namespace balloon_planner
       std::optional<Eigen::Affine3d> get_transform(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
       std::optional<geometry_msgs::TransformStamped> get_transform_raw(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
       std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
-      std::optional<vec4_t> get_current_position();
-      std::optional<vec4_t> get_current_cmd_position();
+      std::optional<path_t> process_path(const path_t& pred);
+      std::optional<vec3_t> process_detection(const balloon_filter::BallLocation& odom);
+      std::optional<vec4_t> process_odom(const nav_msgs::Odometry& det);
+      std::optional<vec3_t> get_ball_position();
+      std::optional<vec4_t> get_uav_position();
+      std::optional<vec4_t> get_uav_cmd_position();
+      std::optional<balloon_filter::BallPrediction> get_ball_prediction();
 
       vec4_t choose_lurking_pose(const std::vector<vec3_t>& ball_positions);
       plane_t get_yz_plane(const vec3_t& pos, const double yaw);

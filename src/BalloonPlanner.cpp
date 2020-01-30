@@ -60,13 +60,14 @@ namespace balloon_planner
       ukf_valid = m_sh_ball_prediction->peek_data()->filter_state.ukf_state.valid;
     }
 
-    const auto cur_pos_yaw_opt = get_current_position();
+    const auto cur_pos_yaw_opt = get_uav_position();
+    const auto ball_pos_opt = get_ball_position();
+    const auto ball_pred_opt = get_ball_prediction();
     /* set constraints, set last seen yaw etc. according to ball position if available //{ */
     
-    if (m_sh_ball_detection->new_data() && cur_pos_yaw_opt.has_value())
+    if (ball_pos_opt.has_value() && cur_pos_yaw_opt.has_value())
     {
-      const auto ball_filtered = *(m_sh_ball_detection->peek_data());
-      const vec3_t ball_pos(ball_filtered.detection.pose.position.x, ball_filtered.detection.pose.position.y, ball_filtered.detection.pose.position.z);
+      const vec3_t ball_pos = ball_pos_opt.value();
       const vec4_t& cur_pos_yaw = cur_pos_yaw_opt.value();
       const vec3_t& cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
       const double& cur_yaw = cur_pos_yaw.w();
@@ -85,32 +86,6 @@ namespace balloon_planner
 
     switch (m_state)
     {
-      case state_enum::waiting_for_detection:
-      {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_DETECTION'");
-        /*  //{ */
-        
-        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_position.transpose() << "]");
-        traj_t result_traj;
-        result_traj.header.frame_id = m_world_frame_id;
-        result_traj.header.stamp = ros::Time::now();
-        result_traj.use_yaw = true;
-        result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_position, result_traj);
-        m_pub_cmd_traj.publish(result_traj);
-        
-        const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
-        if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
-        {
-          ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
-          m_following_start = ros::Time::now();
-          m_ball_positions.clear();
-          m_state = state_enum::following_detection;
-        }
-        
-        //}
-      }
-      break;
       case state_enum::lost_glancing:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'LOST_GLANCING'");
@@ -118,8 +93,8 @@ namespace balloon_planner
 
         /* the main action //{ */
         
-        const auto cur_cmd_pos_yaw_opt = get_current_cmd_position();
-        if (m_sh_ball_detection->new_data() && cur_cmd_pos_yaw_opt.has_value())
+        const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
+        if (cur_cmd_pos_yaw_opt.has_value())
         {
           vec4_t cur_pos_yaw = cur_cmd_pos_yaw_opt.value();
           traj_t glance_traj;
@@ -157,7 +132,7 @@ namespace balloon_planner
 
         /* check time since last detection message and abort if it's been too long //{ */
         
-        if (m_sh_ball_detection->has_data() && time_since_last_det_msg > m_max_unseen_dur + m_glancing_dur)
+        if (time_since_last_det_msg > m_max_unseen_dur + m_glancing_dur)
         {
           ROS_WARN_STREAM("[LOST_GLANCING]: Lost ball. Going back to start!");
           m_state = state_enum::waiting_for_detection;
@@ -168,6 +143,32 @@ namespace balloon_planner
         //}
       }
       break;
+      case state_enum::waiting_for_detection:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_DETECTION'");
+        /*  //{ */
+        
+        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_position.transpose() << "]");
+        traj_t result_traj;
+        result_traj.header.frame_id = m_world_frame_id;
+        result_traj.header.stamp = ros::Time::now();
+        result_traj.use_yaw = true;
+        result_traj.fly_now = true;
+        add_point_to_trajectory(m_start_position, result_traj);
+        m_pub_cmd_traj.publish(result_traj);
+        
+        const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
+        if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
+        {
+          ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
+          m_following_start = ros::Time::now();
+          m_ball_positions.clear();
+          m_state = state_enum::following_detection;
+        }
+        
+        //}
+      }
+      break;
       case state_enum::following_detection:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING_DETECTION'");
@@ -175,13 +176,13 @@ namespace balloon_planner
 
         /* the main action //{ */
         
-        const auto cur_cmd_pos_yaw_opt = get_current_cmd_position();
-        if (m_sh_ball_detection->new_data() && cur_cmd_pos_yaw_opt.has_value())
+        const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
+        if (ball_pos_opt.has_value() && cur_cmd_pos_yaw_opt.has_value())
         {
-          const auto ball_filtered = *(m_sh_ball_detection->get_data());
           const vec4_t& cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
           const vec3_t& cur_cmd_pos = cur_cmd_pos_yaw.block<3, 1>(0, 0);
-          const vec3_t ball_pos(ball_filtered.detection.pose.position.x, ball_filtered.detection.pose.position.y, ball_filtered.detection.pose.position.z);
+          const vec3_t ball_pos = ball_pos_opt.value();
+
           const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
           const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
           const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
@@ -231,10 +232,10 @@ namespace balloon_planner
         
         {
           const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
-          if (m_sh_ball_detection->has_data() && time_since_last_det_msg > m_max_unseen_dur)
+          if (time_since_last_det_msg > m_max_unseen_dur)
           {
             ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Lost ball. Going back to start!");
-            m_state = state_enum::waiting_for_detection;
+            m_state = state_enum::lost_glancing;
           }
         }
         
@@ -250,12 +251,12 @@ namespace balloon_planner
 
         /* the main action //{ */
         
-        const auto cur_cmd_pos_yaw_opt = get_current_cmd_position();
-        if (m_sh_ball_prediction->new_data() && cur_cmd_pos_yaw_opt.has_value())
+        const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
+        if (ball_pred_opt.has_value() && cur_cmd_pos_yaw_opt.has_value())
         {
           const vec3_t cur_cmd_pos = cur_cmd_pos_yaw_opt.value().block<3, 1>(0, 0);
           const auto cur_time = ros::Time::now();
-          const auto ball_prediction = *(m_sh_ball_prediction->get_data());
+          const auto ball_prediction = ball_pred_opt.value();
           const auto& pred_path = ball_prediction.predicted_path;
           if (pred_path.poses.empty())
           {
@@ -315,7 +316,7 @@ namespace balloon_planner
         if (!lkf_valid && !ukf_valid)
         {
           ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Lost ball. Going back to start!");
-          m_state = state_enum::waiting_for_detection;
+          m_state = state_enum::lost_glancing;
         }
         
         //}
@@ -367,7 +368,7 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'LURKING'");
         /*  //{ */
 
-        const auto cur_cmd_pos_yaw_opt = get_current_cmd_position();
+        const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
         if (cur_cmd_pos_yaw_opt.has_value())
         {
           const auto cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
@@ -378,7 +379,7 @@ namespace balloon_planner
           if (m_sh_ball_prediction->new_data())
           /* if prediction is available, adapt the position accordingly //{ */
           {
-            const auto ball_prediction = *(m_sh_ball_prediction->get_data());
+            const auto ball_prediction = ball_pred_opt.value();
             const auto& pred_path = ball_prediction.predicted_path;
             if (pred_path.poses.empty())
             {
@@ -395,11 +396,10 @@ namespace balloon_planner
             intercept_pos_opt = intercept_pos;
           }
           //}
-          if (!intercept_pos_opt.has_value() && m_sh_ball_detection->new_data())
+          if (!intercept_pos_opt.has_value() && ball_pos_opt.has_value())
           /* otherwise use the detection (if available) to orient the lurker //{ */
           {
-            const auto ball_detection = *(m_sh_ball_detection->get_data());
-            const auto ball_pos = to_eigen(ball_detection.detection.pose.position);
+            const auto ball_pos = ball_pos_opt.value();
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
             intercept_pos_opt = cur_cmd_pos_yaw;
@@ -481,9 +481,9 @@ namespace balloon_planner
       mrs_msgs::String::Request req;
       mrs_msgs::String::Response res;
       req.value = constraints_name;
-      if (m_srv_set_constraints.call(req, res))
-        ROS_INFO("Gain manager response: %s", res.message.c_str());
-      else
+      if (!m_srv_set_constraints.call(req, res))
+        /* ROS_INFO("Gain manager response: %s", res.message.c_str()); */
+      /* else */
         ROS_ERROR("Failed to call service to set the constraints!");
     }
     //}
@@ -651,12 +651,36 @@ namespace balloon_planner
   }
   //}
 
-  /* get_current_position() method //{ */
-  std::optional<vec4_t> BalloonPlanner::get_current_position()
+  /* /1* const process_path() method //{ *1/ */
+  /* std::optional<path_t> BalloonPlanner::process_path(const path_t& path) */
+  /* { */
+  /*   auto ret = path; */
+  /*   const auto tf_opt = get_transform_raw(path.header.frame_id, m_world_frame_id, path.header.stamp); */
+  /*   if (!tf_opt.has_value()) */
+  /*     return std::nullopt; */
+  /*   for (auto& pt : ret.poses) */
+  /*   { */
+  /*     tf2::doTransform(pt, pt, tf_opt.value()); */
+  /*   } */
+  /*   return ret; */
+  /* } */
+  /* //} */
+
+  /* process_detection() method //{ */
+  std::optional<vec3_t> BalloonPlanner::process_detection(const balloon_filter::BallLocation& det)
   {
-    if (!m_sh_main_odom->has_data())
+    const auto tf_opt = get_transform_to_world(det.header.frame_id, det.header.stamp);
+    if (!tf_opt.has_value())
       return std::nullopt;
-    const nav_msgs::Odometry odom = *(m_sh_main_odom->get_data());
+    const vec3_t pos = to_eigen(det.detection.pose.position);
+    const vec3_t pos_global = tf_opt.value()*pos;
+    return pos_global;
+  }
+  //}
+
+  /* process_odom() method //{ */
+  std::optional<vec4_t> BalloonPlanner::process_odom(const nav_msgs::Odometry& odom)
+  {
     const auto tf_opt = get_transform_to_world(odom.header.frame_id, odom.header.stamp);
     if (!tf_opt.has_value())
       return std::nullopt;
@@ -670,22 +694,52 @@ namespace balloon_planner
   }
   //}
 
-  /* get_current_cmd_position() method //{ */
-  std::optional<vec4_t> BalloonPlanner::get_current_cmd_position()
+  /* get_ball_prediction() method //{ */
+  std::optional<balloon_filter::BallPrediction> BalloonPlanner::get_ball_prediction()
+  {
+    if (!m_sh_ball_prediction->new_data())
+      return std::nullopt;
+    auto ret = *(m_sh_ball_prediction->get_data());
+    if (ret.header.frame_id != m_world_frame_id)
+    {
+      ROS_ERROR("[%s]: Cannot transform ball prediction message and it's not in the correct frame (expected: '%s', got '%s').", m_node_name.c_str(), m_world_frame_id.c_str(), ret.header.frame_id.c_str());
+      return std::nullopt;
+    }
+    /* const auto opt_path = process_path(ret.predicted_path); */
+    /* if (!opt_path.has_value()) */
+    /*   return std::nullopt; */
+    /* ret.predicted_path = opt_path.value(); */
+    return ret;
+  }
+  //}
+
+  /* get_ball_position() method //{ */
+  std::optional<vec3_t> BalloonPlanner::get_ball_position()
+  {
+    if (!m_sh_ball_detection->new_data())
+      return std::nullopt;
+    const auto det = *(m_sh_ball_detection->get_data());
+    return process_detection(det);
+  }
+  //}
+
+  /* get_uav_position() method //{ */
+  std::optional<vec4_t> BalloonPlanner::get_uav_position()
+  {
+    if (!m_sh_main_odom->has_data())
+      return std::nullopt;
+    const nav_msgs::Odometry odom = *(m_sh_main_odom->get_data());
+    return process_odom(odom);
+  }
+  //}
+
+  /* get_uav_cmd_position() method //{ */
+  std::optional<vec4_t> BalloonPlanner::get_uav_cmd_position()
   {
     if (!m_sh_cmd_odom->has_data())
       return std::nullopt;
     const nav_msgs::Odometry odom = *(m_sh_cmd_odom->get_data());
-    const auto tf_opt = get_transform_to_world(odom.header.frame_id, odom.header.stamp);
-    if (!tf_opt.has_value())
-      return std::nullopt;
-    const vec3_t pos = to_eigen(odom.pose.pose.position);
-    const quat_t quat = to_eigen(odom.pose.pose.orientation);
-    const vec3_t pos_global = tf_opt.value()*pos;
-    const quat_t quat_global = quat_t((tf_opt.value()*quat).rotation());
-    const double yaw = yaw_from_quat(quat_global);
-    const vec4_t pos_yaw(pos_global.x(), pos_global.y(), pos_global.z(), yaw);
-    return pos_yaw;
+    return process_odom(odom);
   }
   //}
 

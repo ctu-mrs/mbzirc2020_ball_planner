@@ -6,8 +6,8 @@ glancing:
   yaw_rate: 1.57 # radians per second
   duration: 1.0 # seconds
 
-approach_speed: 5.0 # metres per second
-chase_speed: 5.0 # metres per second
+approach_speed: 4.0 # metres per second
+chase_speed: 4.0 # metres per second
 catch_trigger_distance: 2.5 # metres
 
 lurking:
