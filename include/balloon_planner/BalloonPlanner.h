@@ -25,6 +25,7 @@
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/Range.h>
 #include <mrs_msgs/MpcTrackerDiagnostics.h>
+#include <mrs_msgs/String.h>
 
 // MRS stuff
 #include <mrs_lib/Profiler.h>
@@ -69,6 +70,7 @@ namespace balloon_planner
     enum state_t
     {
       waiting_for_detection,
+      lost_glancing,
       following_detection,
       following_prediction,
       going_to_lurk,
@@ -111,14 +113,16 @@ namespace balloon_planner
 
       double m_approach_speed;
       double m_chase_speed;
-      double m_max_unseen_time;
+      ros::Duration m_max_unseen_dur;
+      
+      ros::Duration m_glancing_dur;
+      double m_glancing_yaw_rate;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
 
       vec4_t m_start_position;
       double m_target_offset;
-      double m_catch_trigger_distance;
 
       int m_lurking_min_pts;
       ros::Duration m_lurking_min_dur;
@@ -126,11 +130,7 @@ namespace balloon_planner
       double m_lurking_max_dist_from_trajectory;
       double m_lurking_max_reposition;
 
-      double m_pid_kP;
-      double m_pid_kI;
-      double m_pid_kD;
-      double m_pid_max_I;
-      ros::Duration m_pid_reset_duration;
+      std::map<double, std::string> m_constraint_ranges;
 
       //}
 
@@ -150,6 +150,7 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_lurking_points;
 
       ros::ServiceClient m_srv_reset_filter;
+      ros::ServiceClient m_srv_set_constraints;
 
       ros::Timer m_main_loop_timer;
       //}
@@ -162,15 +163,15 @@ namespace balloon_planner
       ros::Time m_following_start;
       std::vector<vec3_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;
+      double m_last_seen_relative_yaw;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
       // --------------------------------------------------------------
 
+      std::string pick_constraints(const double ball_dist);
+      void set_constraints(const std::string& constraints_name);
       void reset_filter();
-
-      std::optional<vec3_t> calc_ball_image_pos(const balloon_filter::BallLocation& ball_filtered);
-      double pid(const double error, const ros::Time& stamp);
 
       vec3_t calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance = 1e-9);
 

@@ -1,52 +1,95 @@
-fast:
-  yaw:
-    speed: 4.14
-    acceleration: 20.0
-    jerk: 30.0
-    snap: 30.0
-
-extreme:
-
-  horizontal:
-    speed: 8.0
-    acceleration: 5.0
-    jerk: 5.0
-    snap: 20.0
-
-  vertical:
-
-    ascending:
-      speed: 5.0
-      acceleration: 2.0
-      jerk: 5.0
-      snap: 8.0
-
-    descending:
-      speed: 5.0
-      acceleration: 2.0
-      jerk: 5.0
-      snap: 8.0
-
-  yaw:
-    speed: 5.0
-    acceleration: 5.0
-    jerk: 5.0
-    snap: 5.0
-
 constraints: [
   "slow",
   "medium",
   "fast",
-  "extreme",
+  "ballcatch_slow",
+  "ballcatch_medium",
+  "ballcatch_fast",
 ]
 
 constraint_management:
 
   # list of allowed gains per odometry mode
   allowed_constraints:
-    GPS: ["slow", "medium", "fast", "extreme"]
+    GPS: [
+      "slow",
+      "medium",
+      "fast",
+      "ballcatch_slow",
+      "ballcatch_medium",
+      "ballcatch_fast",
+      ]
 
   # those gains will be used automatically when a localization mode switches
   # and the current gains are not in the allowed list (next paragraphs)
   fallback_constraints:
-    GPS: "fast"
+    GPS: "ballcatch_fast"
+
+ballcatch_slow:
+  horizontal:
+    speed: 9.0
+    acceleration: 1.1
+    jerk: 10.0
+    snap: 10.0
+  vertical:
+    ascending:
+      speed: 5.0
+      acceleration: 3.0
+      jerk: 5.0
+      snap: 10.0
+    descending:
+      speed: 2.0
+      acceleration: 2.0
+      jerk: 5.0
+      snap: 3.0
+  yaw:
+    speed: 2.0
+    acceleration: 2.0
+    jerk: 3.0
+    snap: 5.0
+
+ballcatch_medium:
+  horizontal:
+    speed: 9.0
+    acceleration: 2.2
+    jerk: 10.0
+    snap: 10.0
+  vertical:
+    ascending:
+      speed: 5.0
+      acceleration: 3.0
+      jerk: 5.0
+      snap: 10.0
+    descending:
+      speed: 2.0
+      acceleration: 2.0
+      jerk: 5.0
+      snap: 3.0
+  yaw:
+    speed: 2.0
+    acceleration: 2.0
+    jerk: 3.0
+    snap: 5.0
+
+ballcatch_fast:
+  horizontal:
+    speed: 9.0
+    acceleration: 3.3
+    jerk: 10.0
+    snap: 10.0
+  vertical:
+    ascending:
+      speed: 5.0
+      acceleration: 3.0
+      jerk: 5.0
+      snap: 10.0
+    descending:
+      speed: 2.0
+      acceleration: 2.0
+      jerk: 5.0
+      snap: 3.0
+  yaw:
+    speed: 2.0
+    acceleration: 2.0
+    jerk: 3.0
+    snap: 5.0

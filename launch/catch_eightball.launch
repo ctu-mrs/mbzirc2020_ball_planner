@@ -8,8 +8,9 @@
   <arg     if="$(arg debug)" name="launch_prefix" value="debug_roslaunch"/>
 
   <group if="$(arg print_debug)">
-  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find balloon_planner)/config/rosconsole/debug.conf"/>
-</group>
+    <env name="ROSCONSOLE_CONFIG_FILE" value="$(find balloon_planner)/config/rosconsole/debug.conf"/>
+  </group>
+
   <group ns="$(arg uav_name)">
 
     <node pkg="nodelet" type="nodelet" name="balloon_planner" args="standalone balloon_planner/BalloonPlanner" output="screen" launch-prefix="$(arg launch_prefix)" >
@@ -33,6 +34,7 @@
 
       <!-- Services -->
       <remap from="~reset_balloon_filter" to="balloon_filter/reset_estimates" />
+      <remap from="~set_constraints" to="constraint_manager/set_constraints" />
 
     </node>
 
