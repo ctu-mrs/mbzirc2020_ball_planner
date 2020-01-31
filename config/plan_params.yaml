@@ -38,5 +38,5 @@ start_position:
     -30.0,   # x coordinate (metres)
     0.0,  # y coordinate (metres)
     7.5,   # z coordinate (metres)
-    -0.9    # yaw (radians)
+    -0.1    # yaw (radians)
   ]
