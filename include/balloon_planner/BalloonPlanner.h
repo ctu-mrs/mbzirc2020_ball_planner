@@ -71,6 +71,7 @@ namespace balloon_planner
     {
       lost_glancing,
       waiting_for_detection,
+      yawing_detection,
       following_detection,
       following_prediction,
       going_to_lurk,
@@ -78,6 +79,24 @@ namespace balloon_planner
     };
   }
   using state_t = state_enum::state_t;
+  /* to_string //{ */
+  
+  std::string to_string(const state_t state)
+  {
+    switch (state)
+    {
+      case state_t::lost_glancing: return "lost_glancing";
+      case state_t::waiting_for_detection: return "waiting_for_detection";
+      case state_t::yawing_detection: return "yawing_detection";
+      case state_t::following_detection: return "following_detection";
+      case state_t::following_prediction: return "following_prediction";
+      case state_t::going_to_lurk: return "going_to_lurk";
+      case state_t::lurking: return "lurking";
+      default: return "unknown_state";
+    }
+  }
+  
+  //}
 
   struct plane_t
   {
@@ -124,13 +143,16 @@ namespace balloon_planner
       vec4_t m_start_position;
       double m_target_offset;
 
+      double m_yawing_max_ball_dist;
+
       int m_lurking_min_pts;
-      ros::Duration m_lurking_min_dur;
+      ros::Duration m_lurking_min_observing_dur;
       double m_lurking_observe_dist;
       double m_lurking_max_dist_from_trajectory;
       double m_lurking_max_reposition;
 
-      std::map<double, std::string> m_constraint_ranges;
+      /* std::map<double, std::string> m_constraint_ranges; */
+      std::map<std::string, std::string> m_constraint_states;
 
       //}
 
@@ -160,7 +182,7 @@ namespace balloon_planner
     private:
       state_t m_state;
       double m_path_offset;
-      ros::Time m_following_start;
+      ros::Time m_observing_start;
       std::vector<vec3_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;
       double m_last_seen_relative_yaw;
@@ -169,7 +191,8 @@ namespace balloon_planner
       // |                helper implementation methods               |
       // --------------------------------------------------------------
 
-      std::string pick_constraints(const double ball_dist);
+      /* std::string pick_constraints(const double ball_dist); */
+      std::string pick_constraints(const state_t state);
       void set_constraints(const std::string& constraints_name);
       void reset_filter();
 

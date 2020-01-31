@@ -10,11 +10,14 @@ approach_speed: 4.0 # metres per second
 chase_speed: 4.0 # metres per second
 catch_trigger_distance: 2.5 # metres
 
+yawing:
+  max_ball_distance: 666.0 # metres
+
 lurking:
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
   max_reposition: 0.2 # metres
-  min_follow_duration: 99999999.0 # seconds
+  min_observing_duration: 99999999.0 # seconds
   min_points: 99999999
 
 trajectory:
@@ -26,11 +29,22 @@ z_bounds:
   min: 3.0
   max: 20.0
 
-constraint_ranges:
+# constraint_ranges:
+#   {
+#     "ballcatch_fast":   3.00,
+#     "ballcatch_medium": 8.00,
+#     "ballcatch_slow":   .inf,
+#   }
+
+constraint_states:
   {
-    "ballcatch_fast":   3.00,
-    "ballcatch_medium": 8.00,
-    "ballcatch_slow":   .inf,
+    "lost_glancing": "ballcatch_slow",
+    "waiting_for_detection": "ballcatch_slow",
+    "yawing_detection": "ballcatch_slow",
+    "following_detection": "ballcatch_slow",
+    "following_prediction": "ballcatch_fast",
+    "going_to_lurk": "ballcatch_fast",
+    "lurking": "ballcatch_medium",
   }
 
 start_position:
