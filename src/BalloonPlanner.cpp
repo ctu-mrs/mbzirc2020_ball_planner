@@ -77,8 +77,8 @@ namespace balloon_planner
       m_last_seen_relative_yaw = ball_relative_yaw;
 
       const double ball_dist = ball_dir.norm();
-      const auto desired_constraints = pick_constraints(ball_dist);
-      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m at " << ball_relative_yaw << " relative yaw, setting '" << desired_constraints << "' constraints.");
+      const auto desired_constraints = pick_constraints(m_state);
+      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is " << ball_dist << "m at " << ball_relative_yaw << " relative yaw. setting '" << desired_constraints << "' constraints.");
       set_constraints(desired_constraints);
     }
     
@@ -123,7 +123,7 @@ namespace balloon_planner
         if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
         {
           ROS_WARN_STREAM("[LOST_GLANCING]: Saw the ball, continuing!");
-          m_following_start = ros::Time::now();
+          m_observing_start = ros::Time::now();
           m_ball_positions.clear();
           m_state = state_enum::following_detection;
         }
@@ -161,11 +161,103 @@ namespace balloon_planner
         if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
         {
           ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
-          m_following_start = ros::Time::now();
+          m_observing_start = ros::Time::now();
           m_ball_positions.clear();
-          m_state = state_enum::following_detection;
+          m_state = state_enum::yawing_detection;
         }
         
+        //}
+      }
+      break;
+      case state_enum::yawing_detection:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'YAWING_DETECTION'");
+        /*  //{ */
+
+        /* the main action //{ */
+        
+        const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
+        if (ball_pos_opt.has_value() && cur_cmd_pos_yaw_opt.has_value())
+        {
+          const vec4_t& cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
+          const vec3_t& cur_cmd_pos = cur_cmd_pos_yaw.block<3, 1>(0, 0);
+          const vec3_t ball_pos = ball_pos_opt.value();
+
+          const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
+          const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
+          const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
+          const vec3_t tgt_pos = ball_pos + offset_vec;
+
+          auto follow_traj = sample_trajectory_between_pts(cur_cmd_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, yaw);
+          const auto follow_traj_duration = trajectory_duration(follow_traj.points.size(), m_trajectory_sampling_dt);
+          ROS_INFO_STREAM_THROTTLE(1.0, "[YAWING_DETECTION]: Follow trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
+      
+          follow_traj.header.frame_id = m_world_frame_id;
+          follow_traj.header.stamp = ros::Time::now();
+          follow_traj.use_yaw = true;
+          follow_traj.fly_now = true;
+      
+          m_pub_cmd_traj.publish(follow_traj);
+          if (m_pub_dbg_traj.getNumSubscribers() > 0)
+            m_pub_dbg_traj.publish(traj_to_path(follow_traj, m_trajectory_sampling_dt));
+
+          m_ball_positions.push_back(ball_pos);
+        }
+        
+        //}
+
+        /* check if some prediction is available and if so, change the state //{ */
+        
+        if (lkf_valid || ukf_valid)
+        {
+          ROS_WARN_STREAM("[YAWING_DETECTION]: Got a prediction, changing state to following prediction!");
+          m_state = state_enum::following_prediction;
+        }
+        
+        //}
+
+        /* check if the ball is getting too far and chase it if necessary //{ */
+        
+        if (ball_pos_opt.has_value() && cur_pos_yaw_opt.has_value())
+        {
+          const vec3_t ball_pos = ball_pos_opt.value();
+          const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
+          const vec3_t ball_real_dir = cur_pos - ball_pos;
+          const double ball_real_dist = ball_real_dir.norm();
+          if (ball_real_dist > m_yawing_max_ball_dist)
+          {
+            ROS_WARN_STREAM("[YAWING_DETECTION]: Ball is too far, changing state to following detection!");
+            m_state = state_enum::following_prediction;
+          }
+        }
+        
+        //}
+
+        /* check if we've been following for long enough to start lurking //{ */
+        
+        const auto observing_dur = ros::Time::now() - m_observing_start;
+        ROS_WARN_THROTTLE(1.0, "[YAWING_DETECTION]: Following for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
+        if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
+        {
+          ROS_WARN_STREAM("[YAWING_DETECTION]: Observing duration fulfilled, changing state to chasing prediction!");
+          m_state = state_enum::going_to_lurk;
+        }
+        
+        //}
+
+        /* check time since last detection message and abort if it's been too long //{ */
+        
+        {
+          const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
+          if (time_since_last_det_msg > m_max_unseen_dur)
+          {
+            ROS_WARN_STREAM("[YAWING_DETECTION]: Lost ball. Going back to start!");
+            m_state = state_enum::lost_glancing;
+          }
+        }
+        
+        //}
+
         //}
       }
       break;
@@ -218,11 +310,11 @@ namespace balloon_planner
 
         /* check if we've been following for long enough to start lurking //{ */
         
-        const auto following_dur = ros::Time::now() - m_following_start;
-        ROS_WARN_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Following for %.2f/%.2fs with %lu/%d points!", following_dur.toSec(), m_lurking_min_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
-        if (following_dur >= m_lurking_min_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
+        const auto observing_dur = ros::Time::now() - m_observing_start;
+        ROS_WARN_THROTTLE(1.0, "[FOLLOWING_DETECTION]: Following for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
+        if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
         {
-          ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Following duration fulfilled, changing state to chasing prediction!");
+          ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Observing duration fulfilled, changing state to chasing prediction!");
           m_state = state_enum::going_to_lurk;
         }
         
@@ -306,11 +398,11 @@ namespace balloon_planner
 
         /* check if we've been following for long enough to start lurking //{ */
         
-        const auto following_dur = ros::Time::now() - m_following_start;
-        ROS_WARN_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Following for %.2f/%.2fs with %lu/%d points!", following_dur.toSec(), m_lurking_min_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
-        if (following_dur >= m_lurking_min_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
+        const auto observing_dur = ros::Time::now() - m_observing_start;
+        ROS_WARN_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Following for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
+        if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
         {
-          ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Following duration fulfilled, changing state to chasing prediction!");
+          ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Observing duration fulfilled, changing state to chasing prediction!");
           m_state = state_enum::going_to_lurk;
         }
         
@@ -466,17 +558,30 @@ namespace balloon_planner
   // --------------------------------------------------------------
 
     /* pick_constraints() method //{ */
-    std::string BalloonPlanner::pick_constraints(const double ball_dist)
+    /* std::string BalloonPlanner::pick_constraints(const double ball_dist) */
+    /* { */
+    /*   assert(!m_constraint_ranges.empty()); */
+    /*   auto prev_constraint = std::begin(m_constraint_ranges)->second; */
+    /*   for (const auto& keyval : m_constraint_ranges) */
+    /*   { */
+    /*     if (keyval.first > ball_dist) */
+    /*       return prev_constraint; */
+    /*     prev_constraint = keyval.second; */
+    /*   } */
+    /*   return prev_constraint; */
+    /* } */
+
+    std::string BalloonPlanner::pick_constraints(const state_t state)
     {
-      assert(!m_constraint_ranges.empty());
-      auto prev_constraint = std::begin(m_constraint_ranges)->second;
-      for (const auto& keyval : m_constraint_ranges)
+      const auto state_name = to_string(state);
+      if (!m_constraint_states.count(state_name))
       {
-        if (keyval.first > ball_dist)
-          return prev_constraint;
-        prev_constraint = keyval.second;
+        const auto ret = std::begin(m_constraint_states)->second;
+        ROS_ERROR("[%s]: constraints for state '%s' were not specified! Using constraints '%s'.", m_node_name.c_str(), state_name.c_str(), ret.c_str());
+        return ret;
       }
-      return prev_constraint;
+      const auto ret = m_constraint_states.at(state_name);
+      return ret;
     }
     //}
 
@@ -1202,26 +1307,29 @@ namespace balloon_planner
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
 
-    pl.load_param("lurking/min_follow_duration", m_lurking_min_dur);
+    pl.load_param("yawing/max_ball_distance", m_yawing_max_ball_dist);
+
+    pl.load_param("lurking/min_observing_duration", m_lurking_min_observing_dur);
     pl.load_param("lurking/min_points", m_lurking_min_pts);
     pl.load_param("lurking/observe_dist", m_lurking_observe_dist);
     pl.load_param("lurking/max_dist_from_trajectory", m_lurking_max_dist_from_trajectory);
     pl.load_param("lurking/max_reposition", m_lurking_max_reposition);
+    pl.load_param("constraint_states", m_constraint_states);
 
     /* load and print constraint ranges //{ */
     
-    const auto constraint_ranges_unsorted = pl.load_param2<std::map<std::string, double>>("constraint_ranges");
-    for (const auto& keyval : constraint_ranges_unsorted)
-      m_constraint_ranges.emplace(keyval.second, keyval.first);
-    ROS_INFO("[%s]: Sorted constraint ranges:", m_node_name.c_str());
-    std::cout << "{" <<std::endl;
-    double prev_dist = 0.0;
-    for (const auto& keyval : m_constraint_ranges)
-    {
-      std::cout << "\t" << prev_dist << "~" << keyval.first << ":\t" << keyval.second << std::endl;
-      prev_dist = keyval.first;
-    }
-    std::cout << "}" <<std::endl;
+    /* const auto constraint_ranges_unsorted = pl.load_param2<std::map<std::string, double>>("constraint_ranges"); */
+    /* for (const auto& keyval : constraint_ranges_unsorted) */
+    /*   m_constraint_ranges.emplace(keyval.second, keyval.first); */
+    /* ROS_INFO("[%s]: Sorted constraint ranges:", m_node_name.c_str()); */
+    /* std::cout << "{" <<std::endl; */
+    /* double prev_dist = 0.0; */
+    /* for (const auto& keyval : m_constraint_ranges) */
+    /* { */
+    /*   std::cout << "\t" << prev_dist << "~" << keyval.first << ":\t" << keyval.second << std::endl; */
+    /*   prev_dist = keyval.first; */
+    /* } */
+    /* std::cout << "}" <<std::endl; */
     
     //}
 
