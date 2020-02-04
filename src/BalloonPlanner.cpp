@@ -185,17 +185,15 @@ namespace balloon_planner
 
           const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
           const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
-          const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
-          const vec3_t tgt_pos = ball_pos + offset_vec;
+          vec4_t tgt_pos_yaw = cur_cmd_pos_yaw;
+          tgt_pos_yaw.w() = yaw;
 
-          auto follow_traj = sample_trajectory_between_pts(cur_cmd_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, yaw);
-          const auto follow_traj_duration = trajectory_duration(follow_traj.points.size(), m_trajectory_sampling_dt);
-          ROS_INFO_STREAM_THROTTLE(1.0, "[YAWING_DETECTION]: Follow trajectory: " << follow_traj_duration.toSec() << "s, " << follow_traj.points.size() << "pts");
-      
+          traj_t follow_traj;
           follow_traj.header.frame_id = m_world_frame_id;
           follow_traj.header.stamp = ros::Time::now();
           follow_traj.use_yaw = true;
           follow_traj.fly_now = true;
+          add_point_to_trajectory(tgt_pos_yaw, follow_traj);
       
           m_pub_cmd_traj.publish(follow_traj);
           if (m_pub_dbg_traj.getNumSubscribers() > 0)
