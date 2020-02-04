@@ -1,0 +1,5 @@
+mrs_collision_avoidance:
+
+  enable: true
+
+  radius: 1.0

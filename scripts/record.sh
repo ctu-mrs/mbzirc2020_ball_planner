@@ -26,7 +26,10 @@ exclude=(
 '(.*)rs_d435(.*)color/image_raw'
 '(.*)rs_d435(.*)color/image_rect_color'
 '(.*)rs_d435(.*)color(.*)compressed/(.*)'
-'(.*)rs_d435(.*)depth/(.*)'
+'(.*)rs_d435(.*)depth/image_raw'
+'(.*)rs_d435(.*)depth/compressed'
+'(.*)rs_d435(.*)depth/compressed/(.*)'
+'(.*)rs_d435(.*)depth/compressedDepth/(.*)'
 '(.*)rs_d435(.*)infra(.*)'
 # Object detect compressed
 '(.*)object_detect(.*)debug_image'
