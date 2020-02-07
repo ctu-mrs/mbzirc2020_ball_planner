@@ -26,7 +26,7 @@ exclude=(
 '(.*)rs_d435(.*)color/image_raw'
 '(.*)rs_d435(.*)color/image_rect_color'
 '(.*)rs_d435(.*)color(.*)compressed/(.*)'
-'(.*)rs_d435(.*)color(.*)compressedDepth/(.*)'
+'(.*)rs_d435(.*)color(.*)compressedDepth(.*)'
 '(.*)rs_d435(.*)depth/image_raw'
 '(.*)rs_d435(.*)depth/image_rect_raw'
 '(.*)rs_d435(.*)depth/image_rect_raw/compressed'
@@ -35,8 +35,8 @@ exclude=(
 '(.*)rs_d435(.*)infra(.*)'
 # Depth detect compressed
 '(.*)depth_detect(.*)processed_depthmap'
-'(.*)depth_detect(.*)processed_depthmap/compressed/(.*)'
-'(.*)depth_detect(.*)processed_depthmap/compressedDepth(.*)'
+'(.*)depth_detect(.*)processed_depthmap/compressed(.*)'
+'(.*)depth_detect(.*)processed_depthmap/compressedDepth/(.*)'
 # Object detect compressed
 '(.*)object_detect(.*)debug_image'
 '(.*)object_detect(.*)debug_image/compressed/(.*)'
