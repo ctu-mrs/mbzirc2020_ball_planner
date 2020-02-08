@@ -31,13 +31,9 @@ input=(
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
 '
-  'Detector1' 'waitForControl; roslaunch object_detect object_detect.launch;
+  'Localization' 'waitForControl; roslaunch balloon_planner localization_pipeline.launch;
 '
-  'Detector2' 'waitForControl; roslaunch object_detect object_detect_bfx.launch;
-'
-  'Filter' 'waitForControl; roslaunch balloon_filter filter_eightball.launch;
-'
-  'Plan' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
+  'Planning' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
 '
   'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
   'Takeoff' 'rosservice call /'"$UAV_NAME"'/uav_manager/takeoff'
