@@ -1364,7 +1364,7 @@ namespace balloon_planner
     m_sh_tracker_diags = smgr.create_handler<mrs_msgs::MpcTrackerDiagnostics>("tracker_diagnostics", ros::Duration(5.0));
 
     m_srv_start = nh.advertiseService("start_state_machine", &BalloonPlanner::start_callback, this);
-    m_srv_stop = nh.advertiseService("stop_state_machine", &BalloonPlanner::start_callback, this);
+    m_srv_stop = nh.advertiseService("stop_state_machine", &BalloonPlanner::stop_callback, this);
 
     //}
 
@@ -1408,8 +1408,11 @@ namespace balloon_planner
 
   bool BalloonPlanner::start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp)
   {
+    if (m_activated)
+      resp.message = "State machine already active! Thank you for number " + std::to_string(req.value);
+    else
+      resp.message = "Activated state machine. Thank you for number " + std::to_string(req.value);
     m_activated = true;
-    resp.message = "Activated state machine. Thank you for number " + std::to_string(req.value);
     resp.success = true;
     return true;
   }
@@ -1420,8 +1423,11 @@ namespace balloon_planner
 
   bool BalloonPlanner::stop_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
   {
+    if (!m_activated)
+      resp.message = "State machine is already inactive!";
+    else
+      resp.message = "Deactivated state machine.";
     m_activated = false;
-    resp.message = "Deactivated state machine.";
     resp.success = true;
     return true;
   }
