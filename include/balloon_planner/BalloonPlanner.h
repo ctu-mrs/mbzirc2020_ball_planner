@@ -26,6 +26,8 @@
 #include <sensor_msgs/Range.h>
 #include <mrs_msgs/MpcTrackerDiagnostics.h>
 #include <mrs_msgs/String.h>
+#include <mrs_msgs/SetInt.h>
+#include <std_srvs/Trigger.h>
 
 // MRS stuff
 #include <mrs_lib/Profiler.h>
@@ -109,7 +111,7 @@ namespace balloon_planner
   class BalloonPlanner : public nodelet::Nodelet
   {
     public:
-      BalloonPlanner() : m_node_name("BalloonPlanner") {};
+      BalloonPlanner() : m_node_name("BalloonPlanner"), m_activated(false) {};
       virtual void onInit();
 
       bool m_is_initialized;
@@ -171,6 +173,9 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_ball_positions;
       ros::Publisher m_pub_dbg_lurking_points;
 
+      ros::ServiceServer m_srv_start;
+      ros::ServiceServer m_srv_stop;
+
       ros::ServiceClient m_srv_reset_filter;
       ros::ServiceClient m_srv_set_constraints;
 
@@ -180,6 +185,7 @@ namespace balloon_planner
       size_t m_max_pts;
 
     private:
+      bool m_activated;
       state_t m_state;
       double m_path_offset;
       ros::Time m_observing_start;
@@ -231,6 +237,9 @@ namespace balloon_planner
       traj_t path_to_traj(const path_t& path);
 
       void load_dynparams(drcfg_t cfg);
+
+      bool start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp);
+      bool stop_callback(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp);
 
   };
   
