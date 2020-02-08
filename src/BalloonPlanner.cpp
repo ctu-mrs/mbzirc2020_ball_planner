@@ -84,6 +84,12 @@ namespace balloon_planner
     
     //}
 
+    if (!m_activated)
+    {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: INACTIVE");
+      return;
+    }
+
     switch (m_state)
     {
       case state_enum::lost_glancing:
@@ -1357,6 +1363,9 @@ namespace balloon_planner
     m_sh_main_odom = smgr.create_handler<nav_msgs::Odometry>("main_odom", ros::Duration(5.0));
     m_sh_tracker_diags = smgr.create_handler<mrs_msgs::MpcTrackerDiagnostics>("tracker_diagnostics", ros::Duration(5.0));
 
+    m_srv_start = nh.advertiseService("start_state_machine", &BalloonPlanner::start_callback, this);
+    m_srv_stop = nh.advertiseService("stop_state_machine", &BalloonPlanner::start_callback, this);
+
     //}
 
     /* publishers //{ */
@@ -1391,6 +1400,30 @@ namespace balloon_planner
     m_state = state_enum::waiting_for_detection;
 
     ROS_INFO("[%s]: initialized", m_node_name.c_str());
+  }
+
+  //}
+
+  /* BalloonPlanner::start_callback() method //{ */
+
+  bool BalloonPlanner::start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp)
+  {
+    m_activated = true;
+    resp.message = "Activated state machine. Thank you for number " + std::to_string(req.value);
+    resp.success = true;
+    return true;
+  }
+
+  //}
+
+  /* BalloonPlanner::stop_callback() method //{ */
+
+  bool BalloonPlanner::stop_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
+  {
+    m_activated = false;
+    resp.message = "Deactivated state machine.";
+    resp.success = true;
+    return true;
   }
 
   //}
