@@ -32,6 +32,9 @@ exclude=(
 '(.*)rs_d435(.*)depth/image_rect_raw/compressed'
 '(.*)rs_d435(.*)depth/image_rect_raw/compressed/(.*)'
 '(.*)rs_d435(.*)depth/image_rect_raw/compressedDepth/(.*)'
+# '(.*)rs_d435(.*)infra(.*)/image_raw'
+# '(.*)rs_d435(.*)infra(.*)/image_rect_raw'
+# '(.*)rs_d435(.*)infra(.*)compressed/(.*)'
 '(.*)rs_d435(.*)infra(.*)'
 # Depth detect compressed
 '(.*)depth_detect(.*)processed_depthmap'

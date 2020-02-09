@@ -13,7 +13,7 @@ fi
 
 source $HOME/.bashrc
 
-PROJECT_NAME=ballcatcher
+PROJECT_NAME=ball_dataset
 
 MAIN_DIR=~/"bag_files"
 
@@ -27,12 +27,15 @@ input=(
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '
+  'Status' 'waitForRos; roslaunch mrs_status status.launch
+'
   'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
 '
   'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
   'Takeoff' 'rosservice call /'"$UAV_NAME"'/uav_manager/takeoff'
+  'GoTo' 'rosservice call /'"$UAV_NAME"'/control_manager/goto "goal: [-30.0, 0.0, 7.5, 0.0]"'
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'
   'GoTo_FCU' 'rosservice call /'"$UAV_NAME"'/control_manager/goto_fcu "goal: [0.0, 0.0, 0.0, 0.0]"'
   'GoToRelative' 'rosservice call /'"$UAV_NAME"'/control_manager/goto_relative "goal: [0.0, 0.0, 0.0, 0.0]"'
@@ -114,22 +117,22 @@ do
   /usr/bin/tmux new-window -t $SESSION_NAME:$(($i+1)) -n "${names[$i]}"
 done
 
-# add pane splitter for mrs_status
-/usr/bin/tmux new-window -t $SESSION_NAME:$((${#names[*]}+1)) -n "mrs_status"
+# # add pane splitter for mrs_status
+# /usr/bin/tmux new-window -t $SESSION_NAME:$((${#names[*]}+1)) -n "mrs_status"
 
-# clear mrs status file so that no clutter is displayed
-truncate -s 0 /tmp/status.txt
+# # clear mrs status file so that no clutter is displayed
+# truncate -s 0 /tmp/status.txt
 
-# split all panes
-pes=""
-for ((i=0; i < ((${#names[*]}+2)); i++));
-do
-  pes=$pes"/usr/bin/tmux split-window -d -t $SESSION_NAME:$(($i))"
-  pes=$pes"/usr/bin/tmux send-keys -t $SESSION_NAME:$(($i)) 'tail -F /tmp/status.txt'"
-  pes=$pes"/usr/bin/tmux select-pane -U -t $(($i))"
-done
+# # split all panes
+# pes=""
+# for ((i=0; i < ((${#names[*]}+2)); i++));
+# do
+#   pes=$pes"/usr/bin/tmux split-window -d -t $SESSION_NAME:$(($i))"
+#   pes=$pes"/usr/bin/tmux send-keys -t $SESSION_NAME:$(($i)) 'tail -F /tmp/status.txt'"
+#   pes=$pes"/usr/bin/tmux select-pane -U -t $(($i))"
+# done
 
-/usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
+# /usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
 
 sleep 6
 
@@ -162,10 +165,10 @@ do
   fi
 done
 
-pes=$pes"/usr/bin/tmux select-window -t $SESSION_NAME:$init_index"
-pes=$pes"waitForRos; roslaunch mrs_status status.launch >> /tmp/status.txt"
+# pes=$pes"/usr/bin/tmux select-window -t $SESSION_NAME:$init_index"
+# pes=$pes"waitForRos; roslaunch mrs_status status.launch >> /tmp/status.txt"
 
-/usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
+# /usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
 
 /usr/bin/tmux -2 attach-session -t $SESSION_NAME
 

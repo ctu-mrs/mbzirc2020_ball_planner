@@ -27,6 +27,8 @@ input=(
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '
+  'Status' 'waitForRos; roslaunch mrs_status status.launch
+'
   'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
@@ -35,8 +37,8 @@ input=(
 '
   'Planning' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
 '
-  'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
-  'Takeoff' 'rosservice call /'"$UAV_NAME"'/uav_manager/takeoff'
+  'AutoStart' 'waitForRos; roslaunch mrs_general automatic_start_mbzirc.launch challenge:=ball
+'
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'
   'GoTo_FCU' 'rosservice call /'"$UAV_NAME"'/control_manager/goto_fcu "goal: [0.0, 0.0, 0.0, 0.0]"'
   'GoToRelative' 'rosservice call /'"$UAV_NAME"'/control_manager/goto_relative "goal: [0.0, 0.0, 0.0, 0.0]"'
@@ -56,7 +58,7 @@ input=(
   'KILL_ALL' 'dmesg; tmux kill-session -t '
 )
 
-init_window="Control"
+init_window="Status"
 
 ###########################
 ### DO NOT MODIFY BELOW ###
@@ -118,24 +120,7 @@ do
   /usr/bin/tmux new-window -t $SESSION_NAME:$(($i+1)) -n "${names[$i]}"
 done
 
-# add pane splitter for mrs_status
-/usr/bin/tmux new-window -t $SESSION_NAME:$((${#names[*]}+1)) -n "mrs_status"
-
-# clear mrs status file so that no clutter is displayed
-truncate -s 0 /tmp/status.txt
-
-# split all panes
-pes=""
-for ((i=0; i < ((${#names[*]}+2)); i++));
-do
-  pes=$pes"/usr/bin/tmux split-window -d -t $SESSION_NAME:$(($i))"
-  pes=$pes"/usr/bin/tmux send-keys -t $SESSION_NAME:$(($i)) 'tail -F /tmp/status.txt'"
-  pes=$pes"/usr/bin/tmux select-pane -U -t $(($i))"
-done
-
-/usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
-
-sleep 6
+sleep 3
 
 # start loggers
 for ((i=0; i < ${#names[*]}; i++));
@@ -149,14 +134,6 @@ do
   tmux send-keys -t $SESSION_NAME:$(($i+1)) "cd $SCRIPTPATH;${pre_input};${cmds[$i]}"
 done
 
-pes="sleep 1;"
-for ((i=0; i < ((${#names[*]}+2)); i++));
-do
-  pes=$pes"/usr/bin/tmux select-window -t $SESSION_NAME:$(($i))"
-  pes=$pes"/usr/bin/tmux resize-pane -U -t $(($i)) 150"
-  pes=$pes"/usr/bin/tmux resize-pane -D -t $(($i)) 7"
-done
-
 # identify the index of the init window
 init_index=0
 for ((i=0; i < ((${#names[*]})); i++));
@@ -166,10 +143,7 @@ do
   fi
 done
 
-pes=$pes"/usr/bin/tmux select-window -t $SESSION_NAME:$init_index"
-pes=$pes"waitForRos; roslaunch mrs_status status.launch >> /tmp/status.txt"
-
-/usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
+/usr/bin/tmux select-window -t $SESSION_NAME:$init_index
 
 /usr/bin/tmux -2 attach-session -t $SESSION_NAME
 
