@@ -56,5 +56,5 @@ safety_area:
     # 24.132438, 55.332592,
     ]
 
-  max_height: 30.0
-  min_height: 4.0
+  max_height: 20.0
+  min_height: 5.0
