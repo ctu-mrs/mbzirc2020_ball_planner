@@ -21,7 +21,7 @@
       <rosparam file="$(find balloon_planner)/config/plan_params.yaml" command="load" />
 
       <!-- Subscribers -->
-      <remap from="~ball_filtered" to="balloon_filter/chosen_measurement" />
+      <remap from="~ball_filtered" to="uav_localize/localized_uav" />
       <remap from="~ball_prediction" to="balloon_filter/ball_prediction" />
       <remap from="~cmd_odom" to="control_manager/cmd_odom" />
       <remap from="~main_odom" to="odometry/odom_main" />
