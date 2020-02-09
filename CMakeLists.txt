@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   message_generation
   balloon_filter
+  uav_localize
   )
 
 # include Eigen3

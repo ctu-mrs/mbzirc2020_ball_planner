@@ -33,7 +33,11 @@ input=(
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
 '
-  'Localization' 'waitForControl; roslaunch balloon_planner localization_pipeline.launch;
+  'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch;
+'
+  'Localization' 'waitForControl; roslaunch uav_localize localize_single.launch;
+'
+  'Filtering' 'waitForControl; roslaunch balloon_filter filter_eightball.launch;
 '
   'Planning' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
 '

@@ -81,10 +81,4 @@
   </include>
 
   <!-- target filtration -->
-  <include file="$(find balloon_filter)/launch/filter_eightball.launch">
-    <arg name="standalone"  value="false" />
-    <arg name="respawn"     value="true" />
-    <arg name="manager"     value="$(arg manager)" />
-  </include>
-  
 </launch>
