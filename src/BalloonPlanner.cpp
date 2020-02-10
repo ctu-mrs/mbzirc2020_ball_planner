@@ -781,12 +781,12 @@ namespace balloon_planner
   /* //} */
 
   /* process_detection() method //{ */
-  std::optional<vec3_t> BalloonPlanner::process_detection(const balloon_filter::BallLocation& det)
+  std::optional<vec3_t> BalloonPlanner::process_detection(const geometry_msgs::PoseWithCovarianceStamped& det)
   {
     const auto tf_opt = get_transform_to_world(det.header.frame_id, det.header.stamp);
     if (!tf_opt.has_value())
       return std::nullopt;
-    const vec3_t pos = to_eigen(det.detection.pose.position);
+    const vec3_t pos = to_eigen(det.pose.pose.position);
     const vec3_t pos_global = tf_opt.value()*pos;
     return pos_global;
   }
@@ -1357,7 +1357,7 @@ namespace balloon_planner
 
     m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer, m_node_name);
     mrs_lib::SubscribeMgr smgr(nh);
-    m_sh_ball_detection = smgr.create_handler<balloon_filter::BallLocation>("ball_filtered", ros::Duration(5.0));
+    m_sh_ball_detection = smgr.create_handler<geometry_msgs::PoseWithCovarianceStamped>("ball_filtered", ros::Duration(5.0));
     m_sh_ball_prediction = smgr.create_handler<balloon_filter::BallPrediction>("ball_prediction", ros::Duration(5.0));
     m_sh_cmd_odom = smgr.create_handler<nav_msgs::Odometry>("cmd_odom", ros::Duration(5.0));
     m_sh_main_odom = smgr.create_handler<nav_msgs::Odometry>("main_odom", ros::Duration(5.0));

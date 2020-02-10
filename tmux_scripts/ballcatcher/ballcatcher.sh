@@ -18,7 +18,7 @@ PROJECT_NAME=ballcatcher
 MAIN_DIR=~/"bag_files"
 
 # following commands will be executed first, in each window
-pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME; export WORLD_FILE=./world.yaml"
+pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME"
 
 # define commands
 # 'name' 'command'
@@ -33,7 +33,7 @@ input=(
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
 '
-  'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch;
+  'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch debug:=true;
 '
   'Localization' 'waitForControl; roslaunch uav_localize localize_single.launch;
 '
