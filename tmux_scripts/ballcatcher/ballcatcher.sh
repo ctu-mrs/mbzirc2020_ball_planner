@@ -18,7 +18,7 @@ PROJECT_NAME=ballcatcher
 MAIN_DIR=~/"bag_files"
 
 # following commands will be executed first, in each window
-pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME"
+pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME;"
 
 # define commands
 # 'name' 'command'
