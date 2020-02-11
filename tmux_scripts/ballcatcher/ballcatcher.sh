@@ -31,7 +31,7 @@ input=(
 '
   'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
 '
-  'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
+  'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch custom_config:=./custom_configs/nimbro.yaml
 '
   'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch debug:=true;
 '

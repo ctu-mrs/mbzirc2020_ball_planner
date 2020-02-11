@@ -458,7 +458,7 @@ namespace balloon_planner
           const auto cur_time = ros::Time::now();
 
           std::optional<vec4_t> intercept_pos_opt;
-          if (m_sh_ball_prediction->new_data())
+          if (ball_pred_opt.has_value())
           /* if prediction is available, adapt the position accordingly //{ */
           {
             const auto ball_prediction = ball_pred_opt.value();

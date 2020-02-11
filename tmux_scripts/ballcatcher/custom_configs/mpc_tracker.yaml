@@ -1,5 +1,11 @@
 mrs_collision_avoidance:
 
-  enable: true
+  enable: false
 
   radius: 1.0
+
+  correction: 2.0
+
+  trajectory_timeout: 2.0
+
+  predicted_trajectory_publish_rate: 10

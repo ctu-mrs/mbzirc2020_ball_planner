@@ -1,6 +1,6 @@
 planning_period: 0.01 # seconds
 
-max_unseen_duration: 555.0 # seconds
+max_unseen_duration: 15.0 # seconds
 
 glancing:
   yaw_rate: 1.57 # radians per second
@@ -17,7 +17,7 @@ lurking:
   z_offset: -1.0 # metres
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
-  max_reposition: 0.2 # metres
+  max_reposition: 1.0 # metres
   min_observing_duration: 3.0 # seconds
   min_points: 20
 
