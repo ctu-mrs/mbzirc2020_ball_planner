@@ -131,7 +131,7 @@ namespace balloon_planner
           ROS_WARN_STREAM("[LOST_GLANCING]: Saw the ball, continuing!");
           m_observing_start = ros::Time::now();
           m_ball_positions.clear();
-          m_state = state_enum::following_detection;
+          m_state = state_enum::yawing_detection;
         }
         
         //}
@@ -230,9 +230,19 @@ namespace balloon_planner
           const double ball_real_dist = ball_real_dir.norm();
           if (ball_real_dist > m_yawing_max_ball_dist)
           {
-            ROS_WARN_STREAM("[YAWING_DETECTION]: Ball is too far, changing state to following detection!");
-            m_state = state_enum::following_prediction;
+            ROS_WARN_STREAM("[YAWING_DETECTION]: Ball is too far (" << ball_real_dist << " > " << m_yawing_max_ball_dist << "), changing state to following detection!");
+            m_state = state_enum::following_detection;
           }
+        }
+        
+        //}
+
+        /* check if some prediction is available and if so, change the state //{ */
+        
+        if (lkf_valid || ukf_valid)
+        {
+          ROS_WARN_STREAM("[YAWING_DETECTION]: Got a prediction, changing state to following prediction!");
+          m_state = state_enum::following_prediction;
         }
         
         //}
