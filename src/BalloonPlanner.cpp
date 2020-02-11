@@ -693,7 +693,7 @@ namespace balloon_planner
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
-    m_lurking_min_observing_dur = cfg.lurking__min_observing_duration;
+    m_lurking_min_observing_dur = ros::Duration(cfg.lurking__min_observing_duration);
     m_lurking_min_pts = cfg.lurking__min_points;
     m_lurking_z_offset = cfg.lurking__z_offset;
     m_lurking_max_reposition = cfg.lurking__max_reposition;
