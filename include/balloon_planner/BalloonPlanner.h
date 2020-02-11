@@ -149,6 +149,7 @@ namespace balloon_planner
 
       int m_lurking_min_pts;
       ros::Duration m_lurking_min_observing_dur;
+      double m_lurking_z_offset;
       double m_lurking_observe_dist;
       double m_lurking_max_dist_from_trajectory;
       double m_lurking_max_reposition;

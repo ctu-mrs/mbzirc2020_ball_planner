@@ -411,7 +411,8 @@ namespace balloon_planner
         /*  //{ */
 
         {
-          const auto lurking_pose = choose_lurking_pose(m_ball_positions);
+          auto lurking_pose = choose_lurking_pose(m_ball_positions);
+          lurking_pose.z() += m_lurking_z_offset;
           m_orig_lurk_pose = lurking_pose;
 
           traj_t intercept_traj;
@@ -493,6 +494,7 @@ namespace balloon_planner
           if (intercept_pos_opt.has_value())
           {
             auto lurking_pose = intercept_pos_opt.value();
+            lurking_pose.z() += m_lurking_z_offset;
             const auto lurking_point = lurking_pose.block<3, 1>(0, 0);
             // limit the maximal reposition to m_lurking_max_reposition from the original lurk position
             const auto reposition = lurking_point - m_orig_lurk_pose.block<3, 1>(0, 0);
@@ -691,6 +693,11 @@ namespace balloon_planner
   /* load_dynparams() method //{ */
   void BalloonPlanner::load_dynparams(drcfg_t cfg)
   {
+    m_lurking_min_observing_dur = cfg.lurking__min_observing_duration;
+    m_lurking_min_pts = cfg.lurking__min_points;
+    m_lurking_z_offset = cfg.lurking__z_offset;
+    m_lurking_max_reposition = cfg.lurking__max_reposition;
+
     m_target_offset = cfg.trajectory__target_offset;
     m_trajectory_horizon = cfg.trajectory__horizon;
     m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
@@ -1293,11 +1300,8 @@ namespace balloon_planner
 
     pl.load_param("yawing/max_ball_distance", m_yawing_max_ball_dist);
 
-    pl.load_param("lurking/min_observing_duration", m_lurking_min_observing_dur);
-    pl.load_param("lurking/min_points", m_lurking_min_pts);
     pl.load_param("lurking/observe_dist", m_lurking_observe_dist);
     pl.load_param("lurking/max_dist_from_trajectory", m_lurking_max_dist_from_trajectory);
-    pl.load_param("lurking/max_reposition", m_lurking_max_reposition);
     pl.load_param("constraint_states", m_constraint_states);
 
     /* load and print constraint ranges //{ */
