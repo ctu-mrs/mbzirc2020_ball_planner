@@ -92,13 +92,15 @@ namespace balloon_planner
 
     switch (m_state)
     {
+      /* UNUSED STATES //{ */
+      
       case state_enum::lost_glancing:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'LOST_GLANCING'");
         /*  //{ */
-
+      
         /* the main action //{ */
-        
+      
         const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
         if (cur_cmd_pos_yaw_opt.has_value())
         {
@@ -109,7 +111,7 @@ namespace balloon_planner
             cur_pos_yaw.w() += m_trajectory_sampling_dt*m_glancing_yaw_rate;
             add_point_to_trajectory(cur_pos_yaw, glance_traj);
           }
-
+      
           glance_traj.header.frame_id = m_world_frame_id;
           glance_traj.header.stamp = ros::Time::now();
           glance_traj.use_yaw = true;
@@ -119,13 +121,13 @@ namespace balloon_planner
           if (m_pub_dbg_traj.getNumSubscribers() > 0)
             m_pub_dbg_traj.publish(traj_to_path(glance_traj, m_trajectory_sampling_dt));
         }
-        
+      
         //}
-
+      
         const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
-
+      
         /* check if we've seen the ball again and resume huntung if possible //{ */
-        
+      
         if (m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur)
         {
           ROS_WARN_STREAM("[LOST_GLANCING]: Saw the ball, continuing!");
@@ -133,21 +135,23 @@ namespace balloon_planner
           m_ball_positions.clear();
           m_state = state_enum::following_detection;
         }
-        
+      
         //}
-
+      
         /* check time since last detection message and abort if it's been too long //{ */
-        
+      
         if (time_since_last_det_msg > m_max_unseen_dur + m_glancing_dur)
         {
           ROS_WARN_STREAM("[LOST_GLANCING]: Lost ball. Going back to start!");
           m_state = state_enum::waiting_for_detection;
         }
-        
+      
         //}
-
+      
         //}
       }
+      
+      //}
       break;
       case state_enum::waiting_for_detection:
       {
@@ -210,53 +214,25 @@ namespace balloon_planner
         
         //}
 
-        /* check if some prediction is available and if so, change the state //{ */
+        /* check time since last detection message and either switch to lurking or abort //{ */
         
-        if (lkf_valid || ukf_valid)
         {
-          ROS_WARN_STREAM("[YAWING_DETECTION]: Got a prediction, changing state to following prediction!");
-          m_state = state_enum::following_prediction;
-        }
-        
-        //}
+          const auto observing_dur = ros::Time::now() - m_observing_start;
+          ROS_WARN_THROTTLE(1.0, "[YAWING_DETECTION]: Observing for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
 
-        /* check if the ball is getting too far and chase it if necessary //{ */
-        
-        if (ball_pos_opt.has_value() && cur_pos_yaw_opt.has_value())
-        {
-          const vec3_t ball_pos = ball_pos_opt.value();
-          const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
-          const vec3_t ball_real_dir = cur_pos - ball_pos;
-          const double ball_real_dist = ball_real_dir.norm();
-          if (ball_real_dist > m_yawing_max_ball_dist)
-          {
-            ROS_WARN_STREAM("[YAWING_DETECTION]: Ball is too far, changing state to following detection!");
-            m_state = state_enum::following_prediction;
-          }
-        }
-        
-        //}
-
-        /* check if we've been following for long enough to start lurking //{ */
-        
-        const auto observing_dur = ros::Time::now() - m_observing_start;
-        ROS_WARN_THROTTLE(1.0, "[YAWING_DETECTION]: Following for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
-        if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
-        {
-          ROS_WARN_STREAM("[YAWING_DETECTION]: Observing duration fulfilled, changing state to chasing prediction!");
-          m_state = state_enum::going_to_lurk;
-        }
-        
-        //}
-
-        /* check time since last detection message and abort if it's been too long //{ */
-        
-        {
           const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
           if (time_since_last_det_msg > m_max_unseen_dur)
           {
-            ROS_WARN_STREAM("[YAWING_DETECTION]: Lost ball. Going back to start!");
-            m_state = state_enum::lost_glancing;
+            if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
+            {
+              ROS_WARN_STREAM("[YAWING_DETECTION]: Observing duration fulfilled, changing state to chasing prediction!");
+              m_state = state_enum::going_to_lurk;
+            }
+            else
+            {
+              ROS_WARN_STREAM("[YAWING_DETECTION]: Lost ball. Going back to start!");
+              m_state = state_enum::lost_glancing;
+            }
           }
         }
         
@@ -265,20 +241,22 @@ namespace balloon_planner
         //}
       }
       break;
+      /* UNUSED STATES //{ */
+      
       case state_enum::following_detection:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING_DETECTION'");
         /*  //{ */
-
+      
         /* the main action //{ */
-        
+      
         const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
         if (ball_pos_opt.has_value() && cur_cmd_pos_yaw_opt.has_value())
         {
           const vec4_t& cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
           const vec3_t& cur_cmd_pos = cur_cmd_pos_yaw.block<3, 1>(0, 0);
           const vec3_t ball_pos = ball_pos_opt.value();
-
+      
           const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
           const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
           const vec3_t offset_vec = m_target_offset*calc_horizontal_offset_vector(dir_vec);
@@ -296,24 +274,24 @@ namespace balloon_planner
           m_pub_cmd_traj.publish(follow_traj);
           if (m_pub_dbg_traj.getNumSubscribers() > 0)
             m_pub_dbg_traj.publish(traj_to_path(follow_traj, m_trajectory_sampling_dt));
-
+      
           m_ball_positions.push_back(ball_pos);
         }
-        
+      
         //}
-
+      
         /* check if some prediction is available and if so, change the state //{ */
-        
+      
         if (lkf_valid || ukf_valid)
         {
           ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Got a prediction, changing state to following prediction!");
           m_state = state_enum::following_prediction;
         }
-        
+      
         //}
-
+      
         /* check if we've been following for long enough to start lurking //{ */
-        
+      
         const auto observing_dur = ros::Time::now() - m_observing_start;
         ROS_WARN_THROTTLE(1.0, "[FOLLOWING_DETECTION]: Following for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
         if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
@@ -321,11 +299,11 @@ namespace balloon_planner
           ROS_WARN_STREAM("[FOLLOWING_DETECTION]: Observing duration fulfilled, changing state to chasing prediction!");
           m_state = state_enum::going_to_lurk;
         }
-        
+      
         //}
-
+      
         /* check time since last detection message and abort if it's been too long //{ */
-        
+      
         {
           const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
           if (time_since_last_det_msg > m_max_unseen_dur)
@@ -334,9 +312,9 @@ namespace balloon_planner
             m_state = state_enum::lost_glancing;
           }
         }
-        
+      
         //}
-
+      
         //}
       }
       break;
@@ -344,9 +322,9 @@ namespace balloon_planner
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'FOLLOWING_PREDICTION'");
         /*  //{ */
-
+      
         /* the main action //{ */
-        
+      
         const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
         if (ball_pred_opt.has_value() && cur_cmd_pos_yaw_opt.has_value())
         {
@@ -370,38 +348,38 @@ namespace balloon_planner
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const vec3_t offset_vec = -m_target_offset*calc_horizontal_offset_vector(dir_vec);
             const vec3_t tgt_pos = ball_pos + offset_vec;
-        
+      
             auto follow_traj_pre1 = sample_trajectory_between_pts(cur_cmd_pos, tgt_pos, m_approach_speed, m_trajectory_sampling_dt, 0.0, header);
             auto follow_traj_pre2 = sample_trajectory_between_pts(tgt_pos, ball_pos, ball_expected_speed, m_trajectory_sampling_dt, 0.0, header);
             auto follow_traj_pre = join_trajectories(follow_traj_pre1, follow_traj_pre2);
             const auto follow_traj_pre_duration = trajectory_duration(follow_traj_pre.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Approach trajectory: " << follow_traj_pre_duration.toSec() << "s, " << follow_traj_pre.points.size() << "pts");
             follow_traj_pre = orient_trajectory_yaw_observe(follow_traj_pre, pred_path);
-        
+      
             const int n_pts = m_max_pts - follow_traj_pre.points.size();
             auto follow_traj_post = sample_trajectory_from_path(pred_path, m_trajectory_sampling_dt, ball_expected_speed, n_pts, header);
             const auto follow_traj_post_duration = trajectory_duration(follow_traj_post.points.size(), m_trajectory_sampling_dt);
             ROS_INFO_STREAM_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Chase trajectory: " << follow_traj_post_duration.toSec() << "s, " << follow_traj_post.points.size() << "pts");
             follow_traj_post = orient_trajectory_yaw_speed(follow_traj_post, pred_path);
-        
+      
             traj_t total_traj = join_trajectories(follow_traj_pre, follow_traj_post);
             total_traj.header = header;
             total_traj.use_yaw = true;
             total_traj.fly_now = true;
-        
+      
             m_pub_cmd_traj.publish(total_traj);
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
               m_pub_dbg_traj.publish(traj_to_path(total_traj, m_trajectory_sampling_dt));
-
+      
             m_ball_positions.push_back(ball_pos);
           }
-        
+      
         }
-        
+      
         //}
-
+      
         /* check if we've been following for long enough to start lurking //{ */
-        
+      
         const auto observing_dur = ros::Time::now() - m_observing_start;
         ROS_WARN_THROTTLE(1.0, "[FOLLOWING_PREDICTION]: Following for %.2f/%.2fs with %lu/%d points!", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), m_ball_positions.size(), m_lurking_min_pts);
         if (observing_dur >= m_lurking_min_observing_dur && (int)m_ball_positions.size() > m_lurking_min_pts)
@@ -409,22 +387,24 @@ namespace balloon_planner
           ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Observing duration fulfilled, changing state to chasing prediction!");
           m_state = state_enum::going_to_lurk;
         }
-        
+      
         //}
-
+      
         /* check time since last prediction message and abort if it's been too long //{ */
-        
+      
         if (!lkf_valid && !ukf_valid)
         {
           ROS_WARN_STREAM("[FOLLOWING_PREDICTION]: Lost ball. Going back to start!");
           m_state = state_enum::lost_glancing;
         }
-        
+      
         //}
-
+      
         //}
       }
       break;
+      
+      //}
       case state_enum::going_to_lurk:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK'");

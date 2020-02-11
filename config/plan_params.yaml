@@ -17,8 +17,8 @@ lurking:
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
   max_reposition: 0.2 # metres
-  min_observing_duration: 99999999.0 # seconds
-  min_points: 99999999
+  min_observing_duration: 3.0 # seconds
+  min_points: 20
 
 trajectory:
   sampling_dt: 0.2 # seconds
