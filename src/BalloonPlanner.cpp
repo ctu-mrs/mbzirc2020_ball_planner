@@ -133,7 +133,7 @@ namespace balloon_planner
           ROS_WARN_STREAM("[LOST_GLANCING]: Saw the ball, continuing!");
           m_observing_start = ros::Time::now();
           m_ball_positions.clear();
-          m_state = state_enum::following_detection;
+          m_state = state_enum::yawing_detection;
         }
       
         //}
