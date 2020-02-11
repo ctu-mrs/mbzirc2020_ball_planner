@@ -412,8 +412,8 @@ namespace balloon_planner
 
         {
           auto lurking_pose = choose_lurking_pose(m_ball_positions);
-          lurking_pose.z() += m_lurking_z_offset;
           m_orig_lurk_pose = lurking_pose;
+          lurking_pose.z() += m_lurking_z_offset;
 
           traj_t intercept_traj;
           add_point_to_trajectory(lurking_pose, intercept_traj);
@@ -474,7 +474,7 @@ namespace balloon_planner
             const auto ball_pos = to_eigen(pred_path.poses.front().pose.position);
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
-            const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z(), yaw);
+            const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z() + m_lurking_z_offset, yaw);
             intercept_pos_opt = intercept_pos;
           }
           //}
@@ -485,7 +485,14 @@ namespace balloon_planner
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
             intercept_pos_opt = cur_cmd_pos_yaw;
-            intercept_pos_opt.value()(3) = yaw;
+            intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset; // set the height according to the detection height
+            intercept_pos_opt.value().w() = yaw; // set the yaw according to the direction of the detection
+          }
+          //}
+          if (!intercept_pos_opt.has_value())
+          /* if neither prediction nor prediction is available, just stay at the current position //{ */
+          {
+            intercept_pos_opt = cur_cmd_pos_yaw;
           }
           //}
 
@@ -494,7 +501,6 @@ namespace balloon_planner
           if (intercept_pos_opt.has_value())
           {
             auto lurking_pose = intercept_pos_opt.value();
-            lurking_pose.z() += m_lurking_z_offset;
             const auto lurking_point = lurking_pose.block<3, 1>(0, 0);
             // limit the maximal reposition to m_lurking_max_reposition from the original lurk position
             const auto reposition = lurking_point - m_orig_lurk_pose.block<3, 1>(0, 0);
@@ -513,7 +519,9 @@ namespace balloon_planner
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
               m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
           
-            const auto repos_dist2 = (lurking_pose.block<3, 1>(0, 0) - m_orig_lurk_pose.block<3, 1>(0, 0)).norm();
+            auto orig_lurk_pose_offset = m_orig_lurk_pose;
+            orig_lurk_pose_offset.z() += m_lurking_z_offset;
+            const auto repos_dist2 = (lurking_pose.block<3, 1>(0, 0) - orig_lurk_pose_offset.block<3, 1>(0, 0)).norm();
             ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f) - %.2fm from orig. lurk point", lurking_pose.x(), lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist2);
           }
           
