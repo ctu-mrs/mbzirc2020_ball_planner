@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_msgs
   mrs_lib
   pcl_ros
+  cv_bridge
   message_generation
   balloon_filter
   uav_localize
@@ -46,6 +47,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
   )
 
@@ -59,4 +61,5 @@ add_dependencies(BalloonPlanner
 ## Specify libraries to link a library or executable target against
 target_link_libraries(BalloonPlanner
   ${catkin_LIBRARIES}
+  ${OpenCV_INCLUDE_DIRS}
   )

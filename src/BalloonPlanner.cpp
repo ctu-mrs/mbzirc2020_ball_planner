@@ -1364,7 +1364,7 @@ namespace balloon_planner
 
     pl.load_param("lurking/observe_dist", m_lurking_observe_dist);
     pl.load_param("lurking/max_dist_from_trajectory", m_lurking_max_dist_from_trajectory);
-    pl.load_param("lurking/n_last_poits", m_lurking_n_last_points);
+    pl.load_param("lurking/n_last_points", m_lurking_n_last_points);
 
     pl.load_param("constraint_states", m_constraint_states);
 
