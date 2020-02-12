@@ -29,6 +29,9 @@
 #include <mrs_msgs/SetInt.h>
 #include <std_srvs/Trigger.h>
 
+// OpenCV includes
+#include <opencv2/imgproc/imgproc.hpp>
+
 // MRS stuff
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -135,7 +138,7 @@ namespace balloon_planner
       double m_approach_speed;
       double m_chase_speed;
       ros::Duration m_max_unseen_dur;
-      
+
       ros::Duration m_glancing_dur;
       double m_glancing_yaw_rate;
 
@@ -153,6 +156,7 @@ namespace balloon_planner
       double m_lurking_observe_dist;
       double m_lurking_max_dist_from_trajectory;
       double m_lurking_max_reposition;
+      int m_lurking_n_last_points;
 
       /* std::map<double, std::string> m_constraint_ranges; */
       std::map<std::string, std::string> m_constraint_states;
@@ -173,6 +177,7 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_traj;
       ros::Publisher m_pub_dbg_ball_positions;
       ros::Publisher m_pub_dbg_lurking_points;
+      ros::Publisher m_pub_dbg_lurking_position;
 
       ros::ServiceServer m_srv_start;
       ros::ServiceServer m_srv_stop;
@@ -233,6 +238,7 @@ namespace balloon_planner
       static vec3_t limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts);
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
       sensor_msgs::PointCloud2 to_output_message(const std::vector<vec3_t>& points, const std_msgs::Header& header);
+      geometry_msgs::PoseStamped to_output_message(const vec4_t& position, const std_msgs::Header& header);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
       traj_t path_to_traj(const path_t& path);

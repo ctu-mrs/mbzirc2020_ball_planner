@@ -20,6 +20,8 @@ find_package(catkin REQUIRED COMPONENTS
   uav_localize
   )
 
+find_package(OpenCV 3.2 REQUIRED)
+
 # include Eigen3
 find_package(Eigen3 REQUIRED)
 
