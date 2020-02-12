@@ -631,6 +631,7 @@ namespace balloon_planner
     }
     cv::Vec6f line;
     cv::fitLine(last_pts, line, cv::DIST_WELSCH, 0, 0.5, 0.02);
+    m_pub_dbg_linefit.publish(to_output_message(line));
 
     // | ------------------ find the lurker point ----------------- |
     const vec3_t direction(line(0), line(1), line(2));
@@ -1333,6 +1334,34 @@ namespace balloon_planner
   }
   //}
 
+  /* to_output_message() method //{ */
+  visualization_msgs::Marker BalloonPlanner::to_output_message(const cv::Vec6f& line)
+  {
+    visualization_msgs::Marker ret;
+    ret.header.frame_id = m_world_frame_id;
+    ret.header.stamp = ros::Time::now();
+    ret.color.a = 1.0;
+    ret.color.r = 1.0;
+    ret.scale.x = 1.0;
+    ret.type = visualization_msgs::Marker::LINE_LIST;
+    ret.pose.orientation.w = 1.0;
+
+    geometry_msgs::Point pt1;
+    pt1.x = line(3);
+    pt1.y = line(4);
+    pt1.z = line(5);
+    geometry_msgs::Point pt2;
+    pt2.x = pt1.x + line(0);
+    pt2.y = pt1.y + line(1);
+    pt2.z = pt1.z + line(2);
+
+    ret.points.push_back(pt1);
+    ret.points.push_back(pt2);
+
+    return ret;
+  }
+  //}
+
   /* onInit() //{ */
 
   void BalloonPlanner::onInit()
@@ -1423,6 +1452,7 @@ namespace balloon_planner
     m_pub_dbg_ball_positions = nh.advertise<sensor_msgs::PointCloud2>("ball_positions", 1);
     m_pub_dbg_lurking_points = nh.advertise<sensor_msgs::PointCloud2>("lurking_points", 1, true);
     m_pub_dbg_lurking_position = nh.advertise<geometry_msgs::PoseStamped>("lurking_position", 1, true);
+    m_pub_dbg_linefit = nh.advertise<visualization_msgs::Marker>("line_fit", 1, true);
 
     //}
 

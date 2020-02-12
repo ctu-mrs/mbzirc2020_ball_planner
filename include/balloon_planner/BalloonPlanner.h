@@ -178,6 +178,7 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_ball_positions;
       ros::Publisher m_pub_dbg_lurking_points;
       ros::Publisher m_pub_dbg_lurking_position;
+      ros::Publisher m_pub_dbg_linefit;
 
       ros::ServiceServer m_srv_start;
       ros::ServiceServer m_srv_stop;
@@ -239,6 +240,7 @@ namespace balloon_planner
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
       sensor_msgs::PointCloud2 to_output_message(const std::vector<vec3_t>& points, const std_msgs::Header& header);
       geometry_msgs::PoseStamped to_output_message(const vec4_t& position, const std_msgs::Header& header);
+      visualization_msgs::Marker to_output_message(const cv::Vec6f& line);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
       traj_t path_to_traj(const path_t& path);
