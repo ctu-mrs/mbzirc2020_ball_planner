@@ -37,6 +37,8 @@ waitForControl;
 roslaunch balloon_filter generate_eight.launch;
 roslaunch balloon_filter load_eight.launch loop:=true;
 '
+  'AutoStart' 'waitForRos; roslaunch mrs_general automatic_start_mbzirc.launch challenge:=ball
+'
   'FlytToStart' 'roslaunch balloon_filter fly_to_start.launch'
   'StartFollowing' 'roslaunch balloon_filter start_following_eight.launch'
   'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
@@ -67,6 +69,13 @@ init_window="Control"
 ###########################
 
 SESSION_NAME=mav
+
+FOUND=$( $TMUX_BIN ls | grep $SESSION_NAME )
+
+if [ $? == 0 ]; then
+  echo "Session already exists"
+  exit
+fi
 
 # Absolute path to this script. /home/user/bin/foo.sh
 SCRIPT=$(readlink -f $0)
@@ -122,24 +131,7 @@ do
   /usr/bin/tmux new-window -t $SESSION_NAME:$(($i+1)) -n "${names[$i]}"
 done
 
-# add pane splitter for mrs_status
-/usr/bin/tmux new-window -t $SESSION_NAME:$((${#names[*]}+1)) -n "mrs_status"
-
-# clear mrs status file so that no clutter is displayed
-truncate -s 0 /tmp/status.txt
-
-# split all panes
-pes=""
-for ((i=0; i < ((${#names[*]}+2)); i++));
-do
-  pes=$pes"/usr/bin/tmux split-window -d -t $SESSION_NAME:$(($i))"
-  pes=$pes"/usr/bin/tmux send-keys -t $SESSION_NAME:$(($i)) 'tail -F /tmp/status.txt'"
-  pes=$pes"/usr/bin/tmux select-pane -U -t $(($i))"
-done
-
-/usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
-
-sleep 6
+sleep 3
 
 # start loggers
 for ((i=0; i < ${#names[*]}; i++));
@@ -153,14 +145,6 @@ do
   tmux send-keys -t $SESSION_NAME:$(($i+1)) "cd $SCRIPTPATH;${pre_input};${cmds[$i]}"
 done
 
-pes="sleep 1;"
-for ((i=0; i < ((${#names[*]}+2)); i++));
-do
-  pes=$pes"/usr/bin/tmux select-window -t $SESSION_NAME:$(($i))"
-  pes=$pes"/usr/bin/tmux resize-pane -U -t $(($i)) 150"
-  pes=$pes"/usr/bin/tmux resize-pane -D -t $(($i)) 7"
-done
-
 # identify the index of the init window
 init_index=0
 for ((i=0; i < ((${#names[*]})); i++));
@@ -170,10 +154,7 @@ do
   fi
 done
 
-pes=$pes"/usr/bin/tmux select-window -t $SESSION_NAME:$init_index"
-pes=$pes"waitForRos; roslaunch mrs_status status.launch >> /tmp/status.txt"
-
-/usr/bin/tmux send-keys -t $SESSION_NAME:$((${#names[*]}+1)) "${pes}"
+/usr/bin/tmux select-window -t $SESSION_NAME:$init_index
 
 /usr/bin/tmux -2 attach-session -t $SESSION_NAME
 
