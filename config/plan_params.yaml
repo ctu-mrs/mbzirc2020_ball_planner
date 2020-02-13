@@ -18,9 +18,9 @@ lurking:
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
   max_reposition: 1.0 # metres
-  min_observing_duration: 3.0 # seconds
-  min_points: 20
-  n_last_points: 8 # how many last points to use when RANSACing the lurking position
+  min_observing_duration: 3.0 # the target must be observed at least this amount of seconds to start lurking
+  min_last_points: 20 # how many last points at minimum to use when RANSACing the lurking position
+  min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position
 
 trajectory:
   sampling_dt: 0.2 # seconds

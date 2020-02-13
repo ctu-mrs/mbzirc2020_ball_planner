@@ -109,6 +109,12 @@ namespace balloon_planner
     vec3_t normal;
   };
 
+  struct pt_stamped_t
+  {
+    vec3_t point;
+    ros::Time stamp;
+  };
+
   /* //{ class BalloonPlanner */
 
   class BalloonPlanner : public nodelet::Nodelet
@@ -150,13 +156,13 @@ namespace balloon_planner
 
       double m_yawing_max_ball_dist;
 
-      int m_lurking_min_pts;
       ros::Duration m_lurking_min_observing_dur;
       double m_lurking_z_offset;
       double m_lurking_observe_dist;
       double m_lurking_max_dist_from_trajectory;
       double m_lurking_max_reposition;
-      int m_lurking_n_last_points;
+      int m_lurking_min_last_pts;
+      ros::Duration m_lurking_min_last_dur;
 
       /* std::map<double, std::string> m_constraint_ranges; */
       std::map<std::string, std::string> m_constraint_states;
@@ -179,6 +185,7 @@ namespace balloon_planner
       ros::Publisher m_pub_dbg_lurking_points;
       ros::Publisher m_pub_dbg_lurking_position;
       ros::Publisher m_pub_dbg_linefit;
+      ros::Publisher m_pub_dbg_linefit_pts;
 
       ros::ServiceServer m_srv_start;
       ros::ServiceServer m_srv_stop;
@@ -196,7 +203,7 @@ namespace balloon_planner
       state_t m_state;
       double m_path_offset;
       ros::Time m_observing_start;
-      std::vector<vec3_t> m_ball_positions;
+      std::vector<pt_stamped_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;
       double m_last_seen_relative_yaw;
 
@@ -215,14 +222,14 @@ namespace balloon_planner
       std::optional<geometry_msgs::TransformStamped> get_transform_raw(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp);
       std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
       std::optional<path_t> process_path(const path_t& pred);
-      std::optional<vec3_t> process_detection(const geometry_msgs::PoseWithCovarianceStamped& det);
+      std::optional<pt_stamped_t> process_detection(const geometry_msgs::PoseWithCovarianceStamped& det);
       std::optional<vec4_t> process_odom(const nav_msgs::Odometry& det);
-      std::optional<vec3_t> get_ball_position();
+      std::optional<pt_stamped_t> get_ball_position();
       std::optional<vec4_t> get_uav_position();
       std::optional<vec4_t> get_uav_cmd_position();
       std::optional<balloon_filter::BallPrediction> get_ball_prediction();
 
-      vec4_t choose_lurking_pose(const std::vector<vec3_t>& ball_positions);
+      vec4_t choose_lurking_pose(const std::vector<pt_stamped_t>& ball_positions);
       plane_t get_yz_plane(const vec3_t& pos, const double yaw);
       vec3_t path_plane_intersection(const path_t& path, const plane_t& plane);
 
@@ -238,9 +245,10 @@ namespace balloon_planner
       traj_t orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path);
       static vec3_t limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts);
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
-      sensor_msgs::PointCloud2 to_output_message(const std::vector<vec3_t>& points, const std_msgs::Header& header);
+      sensor_msgs::PointCloud2 to_output_message(const std::vector<pt_stamped_t>& points, const std_msgs::Header& header);
       geometry_msgs::PoseStamped to_output_message(const vec4_t& position, const std_msgs::Header& header);
-      visualization_msgs::Marker to_output_message(const cv::Vec6f& line);
+      visualization_msgs::Marker to_output_message(const cv::Vec6f& line, const std_msgs::Header& header);
+      sensor_msgs::PointCloud2 to_output_message(const std::vector<cv::Point3d>& points, const std_msgs::Header& header);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
       traj_t path_to_traj(const path_t& path);
