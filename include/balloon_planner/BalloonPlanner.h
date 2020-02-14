@@ -205,6 +205,7 @@ namespace balloon_planner
       ros::Time m_observing_start;
       std::vector<pt_stamped_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;
+      vec4_t m_cur_lurk_pose;
       double m_last_seen_relative_yaw;
 
       // --------------------------------------------------------------

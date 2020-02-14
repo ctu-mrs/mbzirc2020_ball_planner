@@ -1,6 +1,6 @@
 mrs_collision_avoidance:
 
-  enable: false
+  enable: true
 
   radius: 1.0
 
