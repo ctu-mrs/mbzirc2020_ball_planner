@@ -23,7 +23,7 @@ pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME;"
 # define commands
 # 'name' 'command'
 input=(
-  'Rosbag' 'waitForRos; rosrun balloon_planner record.sh
+  'Rosbag' 'waitForOffboard; rosrun balloon_planner record.sh
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '
@@ -69,6 +69,13 @@ init_window="Status"
 ###########################
 
 SESSION_NAME=mav
+
+FOUND=$( /usr/bin/tmux ls | grep $SESSION_NAME )
+
+if [ $? == 0 ]; then
+  echo "Session already exists"
+  exit
+fi
 
 # Absolute path to this script. /home/user/bin/foo.sh
 SCRIPT=$(readlink -f $0)
@@ -149,6 +156,6 @@ done
 
 /usr/bin/tmux select-window -t $SESSION_NAME:$init_index
 
-/usr/bin/tmux -2 attach-session -t $SESSION_NAME
+# /usr/bin/tmux -2 attach-session -t $SESSION_NAME
 
 clear
