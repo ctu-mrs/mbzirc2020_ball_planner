@@ -19,7 +19,6 @@
   <depend>std_msgs</depend>
   <depend>mrs_msgs</depend>
   <depend>balloon_filter</depend>
-  <depend>uav_localize</depend>
   <depend>nodelet</depend>
 
   <build_depend>message_generation</build_depend>

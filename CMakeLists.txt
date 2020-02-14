@@ -18,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   message_generation
   balloon_filter
-  uav_localize
   )
 
 find_package(OpenCV 3.2 REQUIRED)

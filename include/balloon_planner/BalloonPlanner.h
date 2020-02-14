@@ -76,6 +76,7 @@ namespace balloon_planner
     {
       lost_glancing,
       waiting_for_detection,
+      observing,
       yawing_detection,
       following_detection,
       following_prediction,
@@ -174,6 +175,7 @@ namespace balloon_planner
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
       mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
+      mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseStamped> m_sh_ball_passthrough;
       mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_cmd_odom;
       mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_main_odom;
@@ -223,8 +225,10 @@ namespace balloon_planner
       std::optional<Eigen::Affine3d> get_transform_to_world(const std::string& frame_id, ros::Time stamp);
       std::optional<path_t> process_path(const path_t& pred);
       std::optional<pt_stamped_t> process_detection(const geometry_msgs::PoseWithCovarianceStamped& det);
+      std::optional<vec4_t> process_detection(const geometry_msgs::PoseStamped& det);
       std::optional<vec4_t> process_odom(const nav_msgs::Odometry& det);
       std::optional<pt_stamped_t> get_ball_position();
+      std::optional<vec4_t> get_ball_passthrough();
       std::optional<vec4_t> get_uav_position();
       std::optional<vec4_t> get_uav_cmd_position();
       std::optional<balloon_filter::BallPrediction> get_ball_prediction();
