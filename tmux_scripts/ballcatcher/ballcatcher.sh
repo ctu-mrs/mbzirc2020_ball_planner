@@ -29,7 +29,7 @@ input=(
 '
   'Status' 'waitForRos; roslaunch mrs_status status.launch
 '
-  'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
+  'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml config_gain_manager:=./custom_configs/gain_manager.yaml
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch custom_config:=./custom_configs/nimbro.yaml
 '
@@ -157,5 +157,3 @@ done
 /usr/bin/tmux select-window -t $SESSION_NAME:$init_index
 
 # /usr/bin/tmux -2 attach-session -t $SESSION_NAME
-
-clear

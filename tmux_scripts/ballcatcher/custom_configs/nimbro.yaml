@@ -1,7 +1,7 @@
 topics: # topics published out of this machine to receivers specified above
  - name: "control_manager/mpc_tracker/predicted_trajectory"
    compress: false # enable bz2 compression
-   rate: 10.0
+   rate: 2.0
  - name: "control_manager/mpc_tracker/diagnostics"
    compress: false # enable bz2 compression
    rate: 1.0
