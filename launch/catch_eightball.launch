@@ -31,6 +31,9 @@
       <!-- <remap from="~commanded_trajectory" to="~commanded_trajectory" /> -->
       <remap from="~commanded_trajectory" to="control_manager/mpc_tracker/set_trajectory" />
       <remap from="~debug_trajectory" to="~debug_trajectory" />
+      <remap from="~ball_positions" to="~ball_positions" />
+      <remap from="~lurking_points" to="~lurking_points" />
+      <remap from="~lurking_position" to="~lurking_position" />
 
       <!-- Services -->
       <remap from="~reset_balloon_filter" to="balloon_filter/reset_estimates" />

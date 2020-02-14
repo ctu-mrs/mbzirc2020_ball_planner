@@ -1,6 +1,6 @@
 planning_period: 0.01 # seconds
 
-max_unseen_duration: 15.0 # seconds
+max_unseen_duration: 10.0 # seconds
 
 glancing:
   yaw_rate: 1.57 # radians per second
@@ -14,12 +14,13 @@ yawing:
   max_ball_distance: 666.0 # metres
 
 lurking:
-  z_offset: -1.0 # metres
+  z_offset: -1.5 # metres
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
   max_reposition: 1.0 # metres
-  min_observing_duration: 3.0 # seconds
-  min_points: 20
+  min_observing_duration: 3.0 # the target must be observed at least this amount of seconds to start lurking
+  min_last_points: 15 # how many last points at minimum to use when RANSACing the lurking position
+  min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position
 
 trajectory:
   sampling_dt: 0.2 # seconds
@@ -27,7 +28,7 @@ trajectory:
   target_offset: 5.0 # metres
 
 z_bounds:
-  min: 3.0
+  min: 6.0
   max: 20.0
 
 # constraint_ranges:
