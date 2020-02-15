@@ -42,11 +42,12 @@ constraint_states:
   {
     "lost_glancing": "ballcatch_slow",
     "waiting_for_detection": "ballcatch_slow",
+    "observing": "ballcatch_slow",
     "yawing_detection": "ballcatch_slow",
     "following_detection": "ballcatch_slow",
-    "following_prediction": "ballcatch_fast",
-    "going_to_lurk": "ballcatch_fast",
-    "lurking": "ballcatch_medium",
+    "following_prediction": "ballcatch_slow",
+    "going_to_lurk": "ballcatch_slow",
+    "lurking": "ballcatch_slow",
   }
 
 start_position:
