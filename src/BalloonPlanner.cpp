@@ -68,13 +68,13 @@ namespace balloon_planner
 
     const auto cur_pos_yaw_opt = get_uav_position();
     const auto ball_pos_stamped_opt = get_ball_position();
-    const auto ball_passthrough_opt = get_ball_passthrough();
+    const auto ball_passthrough_stamped_opt = get_ball_passthrough();
     const auto ball_pred_opt = get_ball_prediction();
     /* set constraints, set last seen yaw etc. according to ball position if available //{ */
 
     if (ball_pos_stamped_opt.has_value() && cur_pos_yaw_opt.has_value())
     {
-      const vec3_t ball_pos = ball_pos_stamped_opt.value().point;
+      const vec3_t ball_pos = ball_pos_stamped_opt.value().pose.block<3, 1>(0, 0);
       const vec4_t& cur_pos_yaw = cur_pos_yaw_opt.value();
       const vec3_t& cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
       const double& cur_yaw = cur_pos_yaw.w();
@@ -157,9 +157,9 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK'");
         /*  //{ */
 
-        if (ball_passthrough_opt.has_value())
+        if (ball_passthrough_stamped_opt.has_value())
         {
-          vec4_t lurking_pose = ball_passthrough_opt.value();
+          vec4_t lurking_pose = ball_passthrough_stamped_opt.value().pose;
           lurking_pose.w() += M_PI;
           m_orig_lurk_pose = lurking_pose;
           lurking_pose.z() += m_lurking_z_offset;
@@ -240,7 +240,7 @@ namespace balloon_planner
           if (!intercept_pos_opt.has_value() && ball_pos_stamped_opt.has_value())
           /* otherwise use the detection (if available) to orient the lurker //{ */
           {
-            const auto ball_pos = ball_pos_stamped_opt.value().point;
+            const auto ball_pos = ball_pos_stamped_opt.value().pose.block<3, 1>(0, 0);
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
             intercept_pos_opt = cur_cmd_pos_yaw;
@@ -365,7 +365,7 @@ namespace balloon_planner
   //}
 
   /* choose_lurking_pose() method //{ */
-  vec4_t BalloonPlanner::choose_lurking_pose(const std::vector<pt_stamped_t>& ball_positions)
+  vec4_t BalloonPlanner::choose_lurking_pose(const std::vector<pose_stamped_t>& ball_positions)
   {
     assert(ball_positions.size() > (size_t)m_lurking_min_last_pts);
 
@@ -375,7 +375,7 @@ namespace balloon_planner
     ros::Duration pts_dur(0);
     for (auto bit = std::rbegin(ball_positions); bit != std::rend(ball_positions); bit++)
     {
-      const auto& pt = bit->point;
+      const auto& pt = bit->pose.block<3, 1>(0, 0);
       cv::Point3d cvpt(pt.x(), pt.y(), pt.z());
       const auto& stamp = bit->stamp;
       pts_dur = ball_positions.back().stamp - stamp;
@@ -397,22 +397,23 @@ namespace balloon_planner
     const vec3_t direction(line(0), line(1), line(2));
     const vec3_t origin(line(3), line(4), line(5));
     Eigen::ParametrizedLine<double, 3> pline(origin, direction);
-    const vec3_t last_pos = ball_positions.back().point;
+    const vec3_t last_pos = ball_positions.back().pose.block<3, 1>(0, 0);
     const vec3_t lurk_pos = pline.projection(last_pos);
 
-    vec3_t observe_pos = ball_positions.front().point;
+    vec4_t observe_pose = ball_positions.front().pose;
     double observe_dist = std::numeric_limits<double>::max();
-    for (const auto& pt_stamped : ball_positions)
+    for (const auto& pose_stamped : ball_positions)
     {
-      const auto& pos = pt_stamped.point;
+      const auto& pose = pose_stamped.pose;
+      const auto& pos = pose.block<3, 1>(0, 0);
       const double cur_dist = (pos - lurk_pos).norm();
       if (std::abs(cur_dist - m_lurking_observe_dist) < (observe_dist - m_lurking_observe_dist))
       {
-        observe_pos = pos;
+        observe_pose = pose;
         observe_dist = cur_dist;
       }
     }
-    const vec3_t lurk_dir = observe_pos - lurk_pos;
+    const vec3_t lurk_dir = observe_pose.block<3, 1>(0, 0) - lurk_pos;
     const double lurk_yaw = std::atan2(lurk_dir.y(), lurk_dir.x());
     const vec4_t lurk_pose(lurk_pos.x(), lurk_pos.y(), lurk_pos.z(), lurk_yaw);
 
@@ -421,7 +422,7 @@ namespace balloon_planner
       std_msgs::Header header;
       header.frame_id = m_world_frame_id;
       header.stamp = ros::Time::now();
-      std::vector<pt_stamped_t> lurk_pts{{observe_pos, header.stamp}, {lurk_pos, header.stamp}};
+      std::vector<pose_stamped_t> lurk_pts{{observe_pose, header.stamp}, {lurk_pose, header.stamp}};
       m_pub_dbg_lurking_points.publish(to_output_message(lurk_pts, header));
     }
 
@@ -568,19 +569,26 @@ namespace balloon_planner
   /* //} */
 
   /* process_detection() method //{ */
-  std::optional<pt_stamped_t> BalloonPlanner::process_detection(const geometry_msgs::PoseWithCovarianceStamped& det)
+  std::optional<pose_stamped_t> BalloonPlanner::process_detection(const geometry_msgs::PoseWithCovarianceStamped& det)
   {
     const auto tf_opt = get_transform_to_world(det.header.frame_id, det.header.stamp);
     if (!tf_opt.has_value())
       return std::nullopt;
     const vec3_t pos = to_eigen(det.pose.pose.position);
     const vec3_t pos_global = tf_opt.value() * pos;
-    return {{pos_global, det.header.stamp}};
+
+    const quat_t quat = to_eigen(det.pose.pose.orientation);
+    const auto rot_global = tf_opt.value().rotation() * quat;
+    const vec3_t x_vec = rot_global*vec3_t::UnitX();
+    const double yaw = std::atan2(x_vec.y(), x_vec.x());
+    const vec4_t pose_global = {pos_global.x(), pos_global.y(), pos_global.z(), yaw};
+
+    return {{pose_global, det.header.stamp}};
   }
   //}
 
   /* process_detection() method //{ */
-  std::optional<vec4_t> BalloonPlanner::process_detection(const geometry_msgs::PoseStamped& det)
+  std::optional<pose_stamped_t> BalloonPlanner::process_detection(const geometry_msgs::PoseStamped& det)
   {
     const auto tf_opt = get_transform_to_world(det.header.frame_id, det.header.stamp);
     if (!tf_opt.has_value())
@@ -592,8 +600,9 @@ namespace balloon_planner
     const auto rot_global = tf_opt.value().rotation() * quat;
     const vec3_t x_vec = rot_global*vec3_t::UnitX();
     const double yaw = std::atan2(x_vec.y(), x_vec.x());
+    const vec4_t pose_global = {pos_global.x(), pos_global.y(), pos_global.z(), yaw};
 
-    return {{pos_global.x(), pos_global.y(), pos_global.z(), yaw}};
+    return {{pose_global, det.header.stamp}};
   }
   //}
 
@@ -634,7 +643,7 @@ namespace balloon_planner
   //}
 
   /* get_ball_position() method //{ */
-  std::optional<pt_stamped_t> BalloonPlanner::get_ball_position()
+  std::optional<pose_stamped_t> BalloonPlanner::get_ball_position()
   {
     if (!m_sh_ball_detection->new_data())
       return std::nullopt;
@@ -644,7 +653,7 @@ namespace balloon_planner
   //}
 
   /* get_ball_passthrough() method //{ */
-  std::optional<vec4_t> BalloonPlanner::get_ball_passthrough()
+  std::optional<pose_stamped_t> BalloonPlanner::get_ball_passthrough()
   {
     if (!m_sh_ball_passthrough->new_data())
       return std::nullopt;
@@ -1068,7 +1077,7 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<pt_stamped_t>& points, const std_msgs::Header& header)
+  sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<pose_stamped_t>& points, const std_msgs::Header& header)
   {
     const size_t n_pts = points.size();
     sensor_msgs::PointCloud2 ret;
@@ -1090,9 +1099,9 @@ namespace balloon_planner
       sensor_msgs::PointCloud2Iterator<float> iter_z(ret, "z");
       for (size_t it = 0; it < n_pts; it++, ++iter_x, ++iter_y, ++iter_z)
       {
-        *iter_x = points.at(it).point.x();
-        *iter_y = points.at(it).point.y();
-        *iter_z = points.at(it).point.z();
+        *iter_x = points.at(it).pose.x();
+        *iter_y = points.at(it).pose.y();
+        *iter_z = points.at(it).pose.z();
       }
     }
 
