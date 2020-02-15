@@ -1,4 +1,4 @@
-planning_period: 0.01 # seconds
+planning_period: 0.1 # seconds
 
 max_unseen_duration: 10.0 # seconds
 

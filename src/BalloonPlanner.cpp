@@ -67,14 +67,14 @@ namespace balloon_planner
     }
 
     const auto cur_pos_yaw_opt = get_uav_position();
-    const auto ball_pos_stamped_opt = get_ball_position();
+    const auto ball_pose_stamped_opt = get_ball_position();
     const auto ball_passthrough_stamped_opt = get_ball_passthrough();
     const auto ball_pred_opt = get_ball_prediction();
     /* set constraints, set last seen yaw etc. according to ball position if available //{ */
 
-    if (ball_pos_stamped_opt.has_value() && cur_pos_yaw_opt.has_value())
+    if (ball_pose_stamped_opt.has_value() && cur_pos_yaw_opt.has_value())
     {
-      const vec3_t ball_pos = ball_pos_stamped_opt.value().pose.block<3, 1>(0, 0);
+      const vec3_t ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
       const vec4_t& cur_pos_yaw = cur_pos_yaw_opt.value();
       const vec3_t& cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
       const double& cur_yaw = cur_pos_yaw.w();
@@ -99,14 +99,14 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_DETECTION'");
         /*  //{ */
 
-        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_position.transpose() << "]");
+        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_pose.transpose() << "]");
         // TODO: change the height until we get a detection
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time::now();
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_position, result_traj);
+        add_point_to_trajectory(m_start_pose, result_traj);
         m_pub_cmd_traj.publish(result_traj);
 
         const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
@@ -134,13 +134,21 @@ namespace balloon_planner
         const auto time_since_last_det_msg = now - m_sh_ball_detection->last_message_time();
         ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), time_since_last_det_msg.toSec());
 
-        // TODO: adjust the height according to the detection
+        // TODO: if no detection is available, change height up and down
+        vec4_t observe_pose = m_start_pose;
+        // adjust the height according to the detection, if available
+        if (ball_pose_stamped_opt.has_value())
+          observe_pose.z() = ball_pose_stamped_opt.value().pose.z();
+        // otherwise fly to the last passthrough height
+        else if (ball_passthrough_stamped_opt.has_value())
+          observe_pose.z() = ball_passthrough_stamped_opt.value().pose.z();
+
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time::now();
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_position, result_traj);
+        add_point_to_trajectory(m_start_pose, result_traj);
         m_pub_cmd_traj.publish(result_traj);
 
         if (m_sh_ball_passthrough->has_data() && observing_dur >= m_lurking_min_observing_dur)
@@ -237,10 +245,10 @@ namespace balloon_planner
             intercept_pos_opt = intercept_pos;
           }
           //}
-          if (!intercept_pos_opt.has_value() && ball_pos_stamped_opt.has_value())
+          if (!intercept_pos_opt.has_value() && ball_pose_stamped_opt.has_value())
           /* otherwise use the detection (if available) to orient the lurker //{ */
           {
-            const auto ball_pos = ball_pos_stamped_opt.value().pose.block<3, 1>(0, 0);
+            const auto ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
             intercept_pos_opt = cur_cmd_pos_yaw;
@@ -1245,7 +1253,7 @@ namespace balloon_planner
 
     //}
 
-    pl.load_matrix_static<4, 1>("start_position", m_start_position);
+    pl.load_matrix_static<4, 1>("start_position", m_start_pose);
 
     if (!pl.loaded_successfully())
     {
