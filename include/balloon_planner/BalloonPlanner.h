@@ -74,12 +74,12 @@ namespace balloon_planner
   {
     enum state_t
     {
-      lost_glancing,
+      /* lost_glancing, */
       waiting_for_detection,
       observing,
-      yawing_detection,
-      following_detection,
-      following_prediction,
+      /* yawing_detection, */
+      /* following_detection, */
+      /* following_prediction, */
       going_to_lurk,
       lurking,
     };
@@ -91,11 +91,12 @@ namespace balloon_planner
   {
     switch (state)
     {
-      case state_t::lost_glancing: return "lost_glancing";
+      /* case state_t::lost_glancing: return "lost_glancing"; */
       case state_t::waiting_for_detection: return "waiting_for_detection";
-      case state_t::yawing_detection: return "yawing_detection";
-      case state_t::following_detection: return "following_detection";
-      case state_t::following_prediction: return "following_prediction";
+      case state_t::observing: return "observing";
+      /* case state_t::yawing_detection: return "yawing_detection"; */
+      /* case state_t::following_detection: return "following_detection"; */
+      /* case state_t::following_prediction: return "following_prediction"; */
       case state_t::going_to_lurk: return "going_to_lurk";
       case state_t::lurking: return "lurking";
       default: return "unknown_state";
