@@ -1,0 +1,41 @@
+supersoft:
+
+  horizontal:
+
+    attitude:
+      kq: 9.0
+      kw: 0.0
+
+  vertical:
+
+    attitude:
+      kq: 12.0
+      kw: 0.1
+
+soft:
+
+  horizontal:
+
+    attitude:
+      kq: 9.0
+      kw: 0.0
+
+  vertical:
+
+    attitude:
+      kq: 12.0
+      kw: 0.1
+
+tight:
+
+  horizontal:
+
+    attitude:
+      kq: 9.0
+      kw: 0.0
+
+  vertical:
+
+    attitude:
+      kq: 12.0
+      kw: 0.1
