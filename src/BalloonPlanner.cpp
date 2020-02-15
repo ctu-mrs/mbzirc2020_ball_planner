@@ -163,6 +163,7 @@ namespace balloon_planner
           lurking_pose.w() += M_PI;
           m_orig_lurk_pose = lurking_pose;
           lurking_pose.z() += m_lurking_z_offset;
+          m_cur_lurk_pose = lurking_pose;
 
           std_msgs::Header header;
           header.frame_id = m_world_frame_id;
@@ -178,8 +179,8 @@ namespace balloon_planner
           if (m_pub_dbg_traj.getNumSubscribers() > 0)
             m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
 
-          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f)", lurking_pose.x(), lurking_pose.y(),
-                            lurking_pose.z(), lurking_pose.w());
+          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]", lurking_pose.x(), lurking_pose.y(),
+                            lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(), m_orig_lurk_pose.z());
 
           // wait for the lurker to get into the lurking position
           if (m_sh_tracker_diags->has_data() && !m_sh_tracker_diags->get_data()->tracking_trajectory)
@@ -250,7 +251,7 @@ namespace balloon_planner
           if (!intercept_pos_opt.has_value())
           /* if neither prediction nor prediction is available, just stay at the current position //{ */
           {
-            intercept_pos_opt = cur_cmd_pos_yaw;
+            intercept_pos_opt = m_cur_lurk_pose;
           }
           //}
 
@@ -261,11 +262,14 @@ namespace balloon_planner
             auto lurking_pose = intercept_pos_opt.value();
             const auto lurking_point = lurking_pose.block<3, 1>(0, 0);
             // limit the maximal reposition to m_lurking_max_reposition from the original lurk position
-            const auto reposition = lurking_point - m_orig_lurk_pose.block<3, 1>(0, 0);
-            const auto repos_dist = reposition.norm();
+            vec3_t orig_point_offset = m_orig_lurk_pose.block<3, 1>(0, 0);
+            orig_point_offset.z() += m_lurking_z_offset;
+            const vec3_t reposition = lurking_point - orig_point_offset;
+            const double repos_dist = reposition.norm();
             /* ROS_INFO("[]: repos_dist: %.2f, max repos: %.2f", repos_dist, m_lurking_max_reposition); */
             if (repos_dist > m_lurking_max_reposition)
-              lurking_pose.block<3, 1>(0, 0) = m_orig_lurk_pose.block<3, 1>(0, 0) + reposition / repos_dist * m_lurking_max_reposition;
+              lurking_pose.block<3, 1>(0, 0) = orig_point_offset.block<3, 1>(0, 0) + reposition / repos_dist * m_lurking_max_reposition;
+            m_cur_lurk_pose = lurking_pose;
 
             traj_t intercept_traj;
             add_point_to_trajectory(lurking_pose, intercept_traj);
@@ -277,11 +281,8 @@ namespace balloon_planner
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
               m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
 
-            auto orig_lurk_pose_offset = m_orig_lurk_pose;
-            orig_lurk_pose_offset.z() += m_lurking_z_offset;
-            const auto repos_dist2 = (lurking_pose.block<3, 1>(0, 0) - orig_lurk_pose_offset.block<3, 1>(0, 0)).norm();
             ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f) - %.2fm from orig. lurk point", lurking_pose.x(),
-                              lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist2);
+                              lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist);
           }
 
           //}

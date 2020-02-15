@@ -23,13 +23,13 @@ pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME;"
 # define commands
 # 'name' 'command'
 input=(
-  'Rosbag' 'waitForRos; rosrun balloon_planner record.sh
+  'Rosbag' 'waitForOffboard; rosrun balloon_planner record.sh
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '
   'Status' 'waitForRos; roslaunch mrs_status status.launch
 '
-  'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
+  'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml config_gain_manager:=./custom_configs/gain_manager.yaml
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch custom_config:=./custom_configs/nimbro.yaml
 '
@@ -69,6 +69,13 @@ init_window="Status"
 ###########################
 
 SESSION_NAME=mav
+
+FOUND=$( /usr/bin/tmux ls | grep $SESSION_NAME )
+
+if [ $? == 0 ]; then
+  echo "Session already exists"
+  exit
+fi
 
 # Absolute path to this script. /home/user/bin/foo.sh
 SCRIPT=$(readlink -f $0)
@@ -149,6 +156,4 @@ done
 
 /usr/bin/tmux select-window -t $SESSION_NAME:$init_index
 
-/usr/bin/tmux -2 attach-session -t $SESSION_NAME
-
-clear
+# /usr/bin/tmux -2 attach-session -t $SESSION_NAME

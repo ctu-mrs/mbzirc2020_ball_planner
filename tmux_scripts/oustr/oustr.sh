@@ -13,38 +13,34 @@ fi
 
 source $HOME/.bashrc
 
-PROJECT_NAME=just_flying_balltraj
+PROJECT_NAME=oustr
 
 MAIN_DIR=~/"bag_files"
 
 # following commands will be executed first, in each window
-pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME"
+pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME;"
 
 # define commands
 # 'name' 'command'
 input=(
-  'Rosbag' 'waitForOffboard; rosrun mrs_general record.sh
+  'Rosbag' 'waitForOffboard; rosrun balloon_planner record_oustr.sh
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '
   'Status' 'waitForRos; roslaunch mrs_status status.launch
 '
-  'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
+  'Control' 'waitForRos; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml config_gain_manager:=./custom_configs/gain_manager.yaml
 '
-  'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch
+  'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch custom_config:=./custom_configs/nimbro.yaml
 '
-  'TrajectoryLoader' '
-waitForControl;
-roslaunch balloon_filter generate_eight.launch;
-roslaunch balloon_filter load_eight.launch loop:=true;
+  'Oustr' 'waitForControl; roslaunch ouster_driver os1.launch;
+'
+  'OustrTF' 'rosrun tf2_ros static_transform_publisher 0 0 0.2 0 0 0 '"$UAV_NAME"'/fcu velodyne
 '
   'AutoStart' 'waitForRos; roslaunch mrs_general automatic_start_mbzirc.launch challenge:=ball
 '
-  'FlytToStart' 'roslaunch balloon_filter fly_to_start.launch'
-  'StartFollowing' 'roslaunch balloon_filter start_following_eight.launch'
-  'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
-  'Takeoff' 'rosservice call /'"$UAV_NAME"'/uav_manager/takeoff'
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'
+  'GoTo' 'rosservice call /'"$UAV_NAME"'/control_manager/goto "goal: [-30.0, 0.0, 8.5, 0.0]"'
   'GoTo_FCU' 'rosservice call /'"$UAV_NAME"'/control_manager/goto_fcu "goal: [0.0, 0.0, 0.0, 0.0]"'
   'GoToRelative' 'rosservice call /'"$UAV_NAME"'/control_manager/goto_relative "goal: [0.0, 0.0, 0.0, 0.0]"'
   'Land' 'rosservice call /'"$UAV_NAME"'/uav_manager/land'
@@ -63,7 +59,7 @@ roslaunch balloon_filter load_eight.launch loop:=true;
   'KILL_ALL' 'dmesg; tmux kill-session -t '
 )
 
-init_window="Control"
+init_window="Status"
 
 ###########################
 ### DO NOT MODIFY BELOW ###
@@ -158,5 +154,3 @@ done
 /usr/bin/tmux select-window -t $SESSION_NAME:$init_index
 
 # /usr/bin/tmux -2 attach-session -t $SESSION_NAME
-
-clear
