@@ -153,7 +153,7 @@ namespace balloon_planner
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
 
-      vec4_t m_start_position;
+      vec4_t m_start_pose;
       double m_target_offset;
 
       double m_yawing_max_ball_dist;
