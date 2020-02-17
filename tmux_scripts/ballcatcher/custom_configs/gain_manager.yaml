@@ -1,15 +1,22 @@
+gain_management:
+
+  # those gains will be used automatically when a localization mode switches
+  # and the current gains are not in the allowed list (next paragraphs)
+  fallback_gains:
+    GPS: "supersoft"
+
 supersoft:
 
   horizontal:
 
     attitude:
-      kq: 9.0
+      kq: 10.0
       kw: 0.0
 
   vertical:
 
     attitude:
-      kq: 12.0
+      kq: 20.0
       kw: 0.1
 
 soft:
@@ -17,13 +24,13 @@ soft:
   horizontal:
 
     attitude:
-      kq: 9.0
+      kq: 10.0
       kw: 0.0
 
   vertical:
 
     attitude:
-      kq: 12.0
+      kq: 20.0
       kw: 0.1
 
 tight:
@@ -31,11 +38,11 @@ tight:
   horizontal:
 
     attitude:
-      kq: 9.0
+      kq: 10.0
       kw: 0.0
 
   vertical:
 
     attitude:
-      kq: 12.0
+      kq: 20.0
       kw: 0.1

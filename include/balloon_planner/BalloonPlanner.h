@@ -210,6 +210,8 @@ namespace balloon_planner
       vec4_t m_orig_lurk_pose;
       vec4_t m_cur_lurk_pose;
       double m_last_seen_relative_yaw;
+      bool m_sent_lurk_pos;
+      ros::Time m_sent_lurk_pos_stamp;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |

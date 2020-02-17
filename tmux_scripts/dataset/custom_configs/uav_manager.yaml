@@ -1,7 +1,1 @@
-takeoff:
-
-  after_takeoff:
-
-    controller: "So3Controller"
-
-  takeoff_height: 2.5
+../../ballcatcher/custom_configs/uav_manager.yaml

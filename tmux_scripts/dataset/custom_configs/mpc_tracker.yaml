@@ -1,5 +1,1 @@
-mrs_collision_avoidance:
-
-  enable: true
-
-  radius: 1.0
+../../ballcatcher/custom_configs/mpc_tracker.yaml

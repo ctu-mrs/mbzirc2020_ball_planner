@@ -33,7 +33,7 @@ input=(
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch custom_config:=./custom_configs/nimbro.yaml
 '
-  'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch debug:=true;
+  'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch;
 '
   'Filtering' 'waitForControl; roslaunch balloon_filter filter_eightball.launch;
 '
