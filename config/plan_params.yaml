@@ -14,7 +14,7 @@ yawing:
   max_ball_distance: 666.0 # metres
 
 lurking:
-  z_offset: -2.5 # metres
+  z_offset: -0.5 # metres
   observe_dist: 5 # metres
   max_dist_from_trajectory: 5 # metres
   max_reposition: 1.0 # metres

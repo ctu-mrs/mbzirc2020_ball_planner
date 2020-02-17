@@ -154,6 +154,7 @@ namespace balloon_planner
         if (m_sh_ball_passthrough->has_data() && observing_dur >= m_lurking_min_observing_dur)
         {
           ROS_WARN_STREAM("[OBSERVING]: Observing duration fulfilled, going to lurk!");
+          m_sent_lurk_pos = false;
           m_state = state_enum::going_to_lurk;
         }
 
@@ -165,33 +166,11 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK'");
         /*  //{ */
 
-        if (ball_passthrough_stamped_opt.has_value())
+        if (m_sent_lurk_pos)
         {
-          vec4_t lurking_pose = ball_passthrough_stamped_opt.value().pose;
-          lurking_pose.w() += M_PI;
-          m_orig_lurk_pose = lurking_pose;
-          lurking_pose.z() += m_lurking_z_offset;
-          m_cur_lurk_pose = lurking_pose;
-
-          std_msgs::Header header;
-          header.frame_id = m_world_frame_id;
-          header.stamp = ros::Time::now();
-          m_pub_dbg_lurking_position.publish(to_output_message(lurking_pose, header));
-
-          traj_t intercept_traj;
-          add_point_to_trajectory(lurking_pose, intercept_traj);
-          intercept_traj.header = header;
-          intercept_traj.use_yaw = true;
-          intercept_traj.fly_now = true;
-          m_pub_cmd_traj.publish(intercept_traj);
-          if (m_pub_dbg_traj.getNumSubscribers() > 0)
-            m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
-
-          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]", lurking_pose.x(), lurking_pose.y(),
-                            lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(), m_orig_lurk_pose.z());
-
           // wait for the lurker to get into the lurking position
-          if (m_sh_tracker_diags->has_data() && !m_sh_tracker_diags->get_data()->tracking_trajectory)
+          const auto diags_delay = ros::Time::now() - m_sent_lurk_pos_stamp;
+          if (diags_delay > ros::Duration(0.1) && m_sh_tracker_diags->has_data() && !m_sh_tracker_diags->get_data()->tracking_trajectory)
           {
             ROS_INFO("[GOING_TO_LURK]: At lurking spot, switching state to 'LURKING'.");
             reset_filter();
@@ -203,10 +182,45 @@ namespace balloon_planner
             // move to the next state
             m_state = state_enum::lurking;
           }
+          else
+          {
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Waiting to reach lurk position [%.2f, %.2f, %.2f] (yaw: %.2f).", m_lurking_pose.x(), m_lurking_pose.y(),
+                              m_lurking_pose.z(), m_lurking_pose.w());
+          }
         }
         else
         {
-          ROS_ERROR_THROTTLE(1.0, "[GOING_TO_LURK]: Didn't get ball passthrough position! Cannot continue.");
+          if (ball_passthrough_stamped_opt.has_value() )
+          {
+            vec4_t lurking_pose = ball_passthrough_stamped_opt.value().pose;
+            lurking_pose.w() += M_PI; // rotate the yaw to face the incoming ball
+            m_orig_lurk_pose = lurking_pose;
+            lurking_pose.z() += m_lurking_z_offset; // apply the desired offset to the z coordinate
+            m_cur_lurk_pose = lurking_pose;
+
+            std_msgs::Header header;
+            header.frame_id = m_world_frame_id;
+            header.stamp = ros::Time::now();
+            m_pub_dbg_lurking_position.publish(to_output_message(lurking_pose, header));
+
+            traj_t intercept_traj;
+            add_point_to_trajectory(lurking_pose, intercept_traj);
+            intercept_traj.header = header;
+            intercept_traj.use_yaw = true;
+            intercept_traj.fly_now = true;
+            m_pub_cmd_traj.publish(intercept_traj);
+            if (m_pub_dbg_traj.getNumSubscribers() > 0)
+              m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
+
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]", lurking_pose.x(), lurking_pose.y(),
+                              lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(), m_orig_lurk_pose.z());
+            m_sent_lurk_pos = true;
+            m_sent_lurk_pos_stamp = ros::Time::now();
+          }
+          else
+          {
+            ROS_ERROR_THROTTLE(1.0, "[GOING_TO_LURK]: Didn't get ball passthrough position! Cannot continue.");
+          }
         }
 
         //}
@@ -232,6 +246,7 @@ namespace balloon_planner
           if (ball_pred_opt.has_value())
           /* if prediction is available, adapt the position accordingly //{ */
           {
+            ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting position according to prediction.");
             const auto ball_prediction = ball_pred_opt.value();
             const auto& pred_path = ball_prediction.predicted_path;
             if (pred_path.poses.empty())
@@ -239,7 +254,7 @@ namespace balloon_planner
               ROS_WARN_THROTTLE(1.0, "[LURKING]: Empty prediction received, skipping.");
               break;
             }
-            const auto intersect_plane = get_yz_plane(cur_cmd_pos, cur_cmd_pos_yaw(3));
+            const auto intersect_plane = get_yz_plane(m_orig_lurk_pose.block<3, 1>(0, 0), m_orig_lurk_pose(3));
             auto intercept_point = path_plane_intersection(pred_path, intersect_plane);
 
             if (m_pub_dbg_xy_plane.getNumSubscribers() > 0)
@@ -257,6 +272,7 @@ namespace balloon_planner
           if (!intercept_pos_opt.has_value() && ball_pose_stamped_opt.has_value())
           /* otherwise use the detection (if available) to orient the lurker //{ */
           {
+            ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw according to detection.");
             const auto ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
             const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
