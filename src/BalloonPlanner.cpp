@@ -127,7 +127,6 @@ namespace balloon_planner
         ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
                           time_since_last_det_msg.toSec());
 
-        // TODO: if no detection is available, change height up and down
         vec4_t observe_pose = m_start_pose;
         // adjust the height according to the detection, if available
         if (ball_pose_stamped_opt.has_value())
@@ -232,8 +231,8 @@ namespace balloon_planner
         if (cur_cmd_pos_yaw_opt.has_value())
         {
           const auto cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
-          // TODO: remove this cheat (should be taken from cur_cmd_pos_yaw) - this is only for rosbags!
-          const auto cur_cmd_pos = m_cur_lurk_pose_offset.block<3, 1>(0, 0);
+          const auto cur_cmd_pos = cur_cmd_pos_yaw.block<3, 1>(0, 0);
+          /* const auto cur_cmd_pos = m_cur_lurk_pose_offset.block<3, 1>(0, 0); */
           const auto cur_time = ros::Time::now();
 
           const auto intersect_plane = get_yz_plane(m_orig_lurk_pose);
