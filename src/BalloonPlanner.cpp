@@ -93,6 +93,7 @@ namespace balloon_planner
 
         ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_pose.transpose() << "]");
         // TODO: change the height until we get a detection
+        // TODO: also probably some sweeping
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time::now();
@@ -352,6 +353,7 @@ namespace balloon_planner
             if (ball_dist < m_lurking_passthrough_dist)
             {
               const double signed_ball_dist = signed_point_plane_distance(ball_pos, intersect_plane);
+              ROS_WARN("[LURKING]: Signed ball distance from YZ plane: %.2fm!!", signed_ball_dist);
               if (m_prev_signed_ball_dist_set && mrs_lib::sign(signed_ball_dist) != mrs_lib::sign(m_prev_signed_ball_dist))
               {
                 ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
@@ -1443,8 +1445,6 @@ namespace balloon_planner
     pl.load_param("max_unseen_duration", m_max_unseen_dur);
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
-
-    pl.load_param("yawing/max_ball_distance", m_yawing_max_ball_dist);
 
     /* pl.load_param("lurking/observe_dist", m_lurking_observe_dist); */
     pl.load_param("lurking/reaction_dist", m_lurking_reaction_dist);
