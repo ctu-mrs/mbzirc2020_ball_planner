@@ -147,9 +147,6 @@ namespace balloon_planner
       double m_chase_speed;
       ros::Duration m_max_unseen_dur;
 
-      ros::Duration m_glancing_dur;
-      double m_glancing_yaw_rate;
-
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
 
@@ -160,9 +157,10 @@ namespace balloon_planner
 
       ros::Duration m_lurking_min_observing_dur;
       double m_lurking_z_offset;
-      double m_lurking_observe_dist;
-      double m_lurking_max_dist_from_trajectory;
+      /* double m_lurking_observe_dist; */
+      double m_lurking_reaction_dist;
       double m_lurking_max_reposition;
+      /* double m_lurking_max_reyaw; */
       int m_lurking_min_last_pts;
       ros::Duration m_lurking_min_last_dur;
 
@@ -211,8 +209,9 @@ namespace balloon_planner
       double m_path_offset;
       ros::Time m_observing_start;
       std::vector<pose_stamped_t> m_ball_positions;
-      vec4_t m_orig_lurk_pose;
-      vec4_t m_cur_lurk_pose;
+      vec4_t m_orig_lurk_pose;       // the original lurking pose
+      vec4_t m_cur_lurk_pose;        // where the drone currently wans to lurk (without the z offset)
+      vec4_t m_cur_lurk_pose_offset; // offset in the z - direction by m_lurking_z_offset
       double m_last_seen_relative_yaw;
       bool m_sent_lurk_pos;
       ros::Time m_sent_lurk_pos_stamp;
