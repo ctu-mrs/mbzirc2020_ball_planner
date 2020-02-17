@@ -23,11 +23,11 @@ constraint_management:
   # those gains will be used automatically when a localization mode switches
   # and the current gains are not in the allowed list (next paragraphs)
   fallback_constraints:
-    GPS: "ballcatch_fast"
+    GPS: "ballcatch_slow"
 
 ballcatch_slow:
   horizontal:
-    speed: 9.0
+    speed: 2.0
     acceleration: 1.1
     jerk: 10.0
     snap: 10.0
@@ -50,8 +50,8 @@ ballcatch_slow:
 
 ballcatch_medium:
   horizontal:
-    speed: 9.0
-    acceleration: 2.2
+    speed: 2.0
+    acceleration: 1.1
     jerk: 10.0
     snap: 10.0
   vertical:
@@ -73,8 +73,8 @@ ballcatch_medium:
 
 ballcatch_fast:
   horizontal:
-    speed: 9.0
-    acceleration: 3.3
+    speed: 2.0
+    acceleration: 1.1
     jerk: 10.0
     snap: 10.0
   vertical:
