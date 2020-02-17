@@ -8,8 +8,8 @@ approach_speed: 6.0 # metres per second
 
 lurking:
   z_offset: -0.5 # metres
-  reaction_dist: 5.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
-  max_reposition: 1.0 # metres
+  reaction_dist: 7.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
+  max_reposition: 1.5 # metres
   min_observing_duration: 30.0 # the target must be observed at least this amount of seconds to start lurking
   min_last_points: 10 # how many last points at minimum to use when RANSACing the lurking position
   min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position

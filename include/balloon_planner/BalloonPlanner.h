@@ -242,7 +242,7 @@ namespace balloon_planner
 
       vec4_t choose_lurking_pose(const std::vector<pose_stamped_t>& ball_positions);
       plane_t get_yz_plane(const vec3_t& pos, const double yaw);
-      vec3_t path_plane_intersection(const path_t& path, const plane_t& plane);
+      std::optional<vec3_t> path_plane_intersection(const path_t& path, const plane_t& plane);
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
       vec3_t find_approach_pt(const vec3_t& from_pt, const ros::Time& from_time, const path_t& to_path, const double speed);

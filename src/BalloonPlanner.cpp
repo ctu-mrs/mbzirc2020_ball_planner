@@ -256,19 +256,27 @@ namespace balloon_planner
               }
               else
               {
-                ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting position according to prediction.");
                 const auto intersect_plane = get_yz_plane(m_orig_lurk_pose.block<3, 1>(0, 0), m_orig_lurk_pose(3));
-                auto intercept_point = path_plane_intersection(pred_path, intersect_plane);
-
                 if (m_pub_dbg_xy_plane.getNumSubscribers() > 0)
                   m_pub_dbg_xy_plane.publish(plane_visualization(intersect_plane, header));
-                if (m_pub_dbg_int_pt.getNumSubscribers() > 0)
-                  m_pub_dbg_int_pt.publish(to_msg(intercept_point, header));
 
-                const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
-                const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
-                const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z() + m_lurking_z_offset, yaw);
-                intercept_pos_opt = intercept_pos;
+                const auto intercept_point_opt = path_plane_intersection(pred_path, intersect_plane);
+                if (intercept_point_opt.has_value())
+                {
+                  ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting position according to prediction.");
+                  const auto intercept_point = intercept_point_opt.value();
+                  if (m_pub_dbg_int_pt.getNumSubscribers() > 0)
+                    m_pub_dbg_int_pt.publish(to_msg(intercept_point, header));
+
+                  const vec3_t dir_vec = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).normalized();
+                  const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
+                  const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z() + m_lurking_z_offset, yaw);
+                  intercept_pos_opt = intercept_pos;
+                }
+                else
+                {
+                  ROS_WARN_THROTTLE(1.0, "[LURKING]: Predicted trajectory doesn't intersect the XY lurking plane! Ignoring it.");
+                }
               }
             }
           }
@@ -285,7 +293,7 @@ namespace balloon_planner
             else
             {
               ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw according to detection.");
-              const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
+              const vec3_t dir_vec = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).normalized();
               const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
               intercept_pos_opt = cur_cmd_pos_yaw;
               intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset;  // set the height according to the detection height
@@ -490,38 +498,40 @@ namespace balloon_planner
   double line_plane_intersection_coeff(const vec3_t& line_start, const vec3_t& line_dir, const plane_t& plane)
   {
     const double den = line_dir.dot(plane.normal);
-    if (den == 0.0)
-      return std::numeric_limits<double>::max();
     const double nom = (plane.point - line_start).dot(plane.normal);
+    // check for the case of a line parallel to the plane, the intersection would be at infinity
+    // or anywhere in case of a line lying in the plane
+    if (den == 0.0)
+    {
+      if (nom == 0.0)
+        return 0.0;
+      else
+        return std::numeric_limits<double>::infinity();
+    }
     return nom / den;
   }
   //}
 
   /* path_plane_intersection() method //{ */
-  vec3_t BalloonPlanner::path_plane_intersection(const path_t& path, const plane_t& plane)
+  std::optional<vec3_t> BalloonPlanner::path_plane_intersection(const path_t& path, const plane_t& plane)
   {
     assert(path.poses.size() > 1);
     std::optional<vec3_t> intersection;
     vec3_t prev_end = to_eigen(path.poses.front().pose.position);
-    for (const auto& pose : path.poses)
+    for (size_t it = 1; it < path.poses.size(); it++)
     {
       const vec3_t line_start = prev_end;
-      const vec3_t line_end = to_eigen(pose.pose.position);
+      const vec3_t line_end = to_eigen(path.poses.at(it).pose.position);
       const vec3_t line_dir = line_end - line_start;
       const double cur_coeff = line_plane_intersection_coeff(line_start, line_dir, plane);
       if (cur_coeff >= 0.0 && cur_coeff <= 1.0)
+      {
         intersection = line_start + cur_coeff * line_dir;
+        break; // we're only interested in the first intersection
+      }
       prev_end = line_end;
     }
-    if (!intersection.has_value())
-    {
-      const vec3_t line_start = to_eigen(path.poses.at(path.poses.size() - 2).pose.position);
-      const vec3_t line_end = prev_end;
-      const vec3_t line_dir = line_end - line_start;
-      const double cur_coeff = line_plane_intersection_coeff(line_start, line_dir, plane);
-      intersection = line_start + cur_coeff * line_dir;
-    }
-    return intersection.value();
+    return intersection;
   }
   //}
 
