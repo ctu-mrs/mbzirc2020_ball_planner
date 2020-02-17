@@ -27,6 +27,7 @@
 #include <mrs_msgs/MpcTrackerDiagnostics.h>
 #include <mrs_msgs/String.h>
 #include <mrs_msgs/SetInt.h>
+#include <mrs_msgs/ReferenceStampedSrv.h>
 #include <std_srvs/Trigger.h>
 
 // OpenCV includes
@@ -196,6 +197,7 @@ namespace balloon_planner
 
       ros::ServiceClient m_srv_reset_filter;
       ros::ServiceClient m_srv_set_constraints;
+      ros::ServiceClient m_srv_land_there;
 
       ros::Timer m_main_loop_timer;
       //}
@@ -217,6 +219,8 @@ namespace balloon_planner
       double m_prev_signed_ball_dist_set;
       double m_prev_signed_ball_dist;
 
+      vec4_t m_landing_pose;
+
       // --------------------------------------------------------------
       // |                helper implementation methods               |
       // --------------------------------------------------------------
@@ -225,6 +229,7 @@ namespace balloon_planner
       std::string pick_constraints(const state_t state);
       void set_constraints(const std::string& constraints_name);
       void reset_filter();
+      bool land_there(const vec4_t& landing_pose);
 
       vec3_t calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance = 1e-9);
 
@@ -267,6 +272,7 @@ namespace balloon_planner
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
       traj_t path_to_traj(const path_t& path);
+
 
       void load_dynparams(drcfg_t cfg);
 

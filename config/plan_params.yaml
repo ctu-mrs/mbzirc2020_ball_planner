@@ -43,3 +43,11 @@ start_position:
     8.5,   # z coordinate (metres)
     -0.1    # yaw (radians)
   ]
+
+landing_position:
+  [
+    -30.0,   # x coordinate (metres)
+    0.0,  # y coordinate (metres)
+    5.0,   # z coordinate (metres)
+    0.0    # yaw (radians)
+  ]

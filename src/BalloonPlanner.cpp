@@ -358,6 +358,7 @@ namespace balloon_planner
               {
                 ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
                 // TODO: check if the ball is in the net and if so, go land
+                /* land_there(m_landing_pose); */
               }
               m_prev_signed_ball_dist = signed_ball_dist;
               m_prev_signed_ball_dist_set = true;
@@ -443,71 +444,24 @@ namespace balloon_planner
   }
   //}
 
-  /* /1* choose_lurking_pose() method //{ *1/ */
-  /* vec4_t BalloonPlanner::choose_lurking_pose(const std::vector<pose_stamped_t>& ball_positions) */
-  /* { */
-  /*   assert(ball_positions.size() > (size_t)m_lurking_min_last_pts); */
-
-  /*   // | ---------------- fit line to last N points --------------- | */
-  /*   std::vector<cv::Point3d> last_pts; */
-  /*   last_pts.reserve(m_lurking_min_last_pts); */
-  /*   ros::Duration pts_dur(0); */
-  /*   for (auto bit = std::rbegin(ball_positions); bit != std::rend(ball_positions); bit++) */
-  /*   { */
-  /*     const auto& pt = bit->pose.block<3, 1>(0, 0); */
-  /*     cv::Point3d cvpt(pt.x(), pt.y(), pt.z()); */
-  /*     const auto& stamp = bit->stamp; */
-  /*     pts_dur = ball_positions.back().stamp - stamp; */
-  /*     if (last_pts.size() >= (size_t)m_lurking_min_last_pts && pts_dur >= m_lurking_min_last_dur) */
-  /*       break; */
-  /*     last_pts.push_back(cvpt); */
-  /*   } */
-  /*   cv::Vec6f line; */
-  /*   cv::fitLine(last_pts, line, cv::DIST_WELSCH, 0, 0.5, 0.02); */
-  /*   { */
-  /*     std_msgs::Header header; */
-  /*     header.frame_id = m_world_frame_id; */
-  /*     header.stamp = ros::Time::now(); */
-  /*     m_pub_dbg_linefit.publish(to_output_message(line, header)); */
-  /*     m_pub_dbg_linefit_pts.publish(to_output_message(last_pts, header)); */
-  /*   } */
-
-  /*   // | ------------------ find the lurker point ----------------- | */
-  /*   const vec3_t direction(line(0), line(1), line(2)); */
-  /*   const vec3_t origin(line(3), line(4), line(5)); */
-  /*   Eigen::ParametrizedLine<double, 3> pline(origin, direction); */
-  /*   const vec3_t last_pos = ball_positions.back().pose.block<3, 1>(0, 0); */
-  /*   const vec3_t lurk_pos = pline.projection(last_pos); */
-
-  /*   vec4_t observe_pose = ball_positions.front().pose; */
-  /*   double observe_dist = std::numeric_limits<double>::max(); */
-  /*   for (const auto& pose_stamped : ball_positions) */
-  /*   { */
-  /*     const auto& pose = pose_stamped.pose; */
-  /*     const auto& pos = pose.block<3, 1>(0, 0); */
-  /*     const double cur_dist = (pos - lurk_pos).norm(); */
-  /*     if (std::abs(cur_dist - m_lurking_observe_dist) < (observe_dist - m_lurking_observe_dist)) */
-  /*     { */
-  /*       observe_pose = pose; */
-  /*       observe_dist = cur_dist; */
-  /*     } */
-  /*   } */
-  /*   const vec3_t lurk_dir = observe_pose.block<3, 1>(0, 0) - lurk_pos; */
-  /*   const double lurk_yaw = std::atan2(lurk_dir.y(), lurk_dir.x()); */
-  /*   const vec4_t lurk_pose(lurk_pos.x(), lurk_pos.y(), lurk_pos.z(), lurk_yaw); */
-
-  /*   if (m_pub_dbg_lurking_points.getNumSubscribers()) */
-  /*   { */
-  /*     std_msgs::Header header; */
-  /*     header.frame_id = m_world_frame_id; */
-  /*     header.stamp = ros::Time::now(); */
-  /*     std::vector<pose_stamped_t> lurk_pts{{observe_pose, header.stamp}, {lurk_pose, header.stamp}}; */
-  /*     m_pub_dbg_lurking_points.publish(to_output_message(lurk_pts, header)); */
-  /*   } */
-
-  /*   return lurk_pose; */
-  /* } */
-  /* //} */
+  /* land_there() method //{ */
+  bool BalloonPlanner::land_there(const vec4_t& landing_pose)
+  {
+    mrs_msgs::ReferenceStampedSrv::Request req;
+    req.header.frame_id = m_world_frame_id;
+    req.header.stamp = ros::Time::now();
+    req.reference.position.x = landing_pose.x();
+    req.reference.position.y = landing_pose.y();
+    req.reference.position.z = landing_pose.z();
+    req.reference.yaw = landing_pose.w();
+    mrs_msgs::ReferenceStampedSrv::Response res;
+    if (m_srv_land_there.call(req, res))
+      ROS_INFO("Filter response: %s", res.message.c_str());
+    else
+      ROS_ERROR("Failed to call service to reset the filter!");
+    return res.success;
+  }
+  //}
 
   /* get_yz_plane() method //{ */
   plane_t BalloonPlanner::get_yz_plane(const vec4_t& pose)
@@ -643,21 +597,6 @@ namespace balloon_planner
   }
   //}
 
-  /* /1* const process_path() method //{ *1/ */
-  /* std::optional<path_t> BalloonPlanner::process_path(const path_t& path) */
-  /* { */
-  /*   auto ret = path; */
-  /*   const auto tf_opt = get_transform_raw(path.header.frame_id, m_world_frame_id, path.header.stamp); */
-  /*   if (!tf_opt.has_value()) */
-  /*     return std::nullopt; */
-  /*   for (auto& pt : ret.poses) */
-  /*   { */
-  /*     tf2::doTransform(pt, pt, tf_opt.value()); */
-  /*   } */
-  /*   return ret; */
-  /* } */
-  /* //} */
-
   /* process_detection() method //{ */
   std::optional<pose_stamped_t> BalloonPlanner::process_detection(const geometry_msgs::PoseWithCovarianceStamped& det)
   {
@@ -783,14 +722,6 @@ namespace balloon_planner
       return std::nullopt;
     const nav_msgs::Odometry odom = *(m_sh_cmd_odom->get_data());
     return process_odom(odom);
-  }
-  //}
-
-  /* sign() method //{ */
-  template <typename T>
-  int sign(T val)
-  {
-    return (T(0) < val) - (val < T(0));
   }
   //}
 
@@ -1180,6 +1111,9 @@ namespace balloon_planner
   }
   //}
 
+  // | ------------------ Visualization methods ----------------- |
+  /* methods //{ */
+  
   /* to_output_message() method //{ */
   sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<pose_stamped_t>& points, const std_msgs::Header& header)
   {
@@ -1188,14 +1122,14 @@ namespace balloon_planner
     ret.header = header;
     ret.height = 1;
     ret.width = n_pts;
-
+  
     {
       // Prepare the PointCloud2
       sensor_msgs::PointCloud2Modifier modifier(ret);
       modifier.setPointCloud2FieldsByString(1, "xyz");
       modifier.resize(n_pts);
     }
-
+  
     {
       // Fill the PointCloud2
       sensor_msgs::PointCloud2Iterator<float> iter_x(ret, "x");
@@ -1208,34 +1142,34 @@ namespace balloon_planner
         *iter_z = points.at(it).pose.z();
       }
     }
-
+  
     return ret;
   }
   //}
-
+  
   /* to_output_message() method //{ */
   geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const vec4_t& position, const std_msgs::Header& header)
   {
     geometry_msgs::PoseStamped ret;
     ret.header = header;
-
+  
     ret.pose.position.x = position.x();
     ret.pose.position.y = position.y();
     ret.pose.position.z = position.z();
-
+  
     const double yaw = position.w();
     const vec3_t heading_vec(std::cos(yaw), std::sin(yaw), 0);
     const quat_t quat = mrs_lib::quaternion_between(mrs_lib::vec3_t(1.0, 0.0, 0.0), heading_vec);
-
+  
     ret.pose.orientation.x = quat.x();
     ret.pose.orientation.y = quat.y();
     ret.pose.orientation.z = quat.z();
     ret.pose.orientation.w = quat.w();
-
+  
     return ret;
   }
   //}
-
+  
   /* to_output_message() method //{ */
   visualization_msgs::Marker BalloonPlanner::to_output_message(const cv::Vec6f& line, const std_msgs::Header& header)
   {
@@ -1246,7 +1180,7 @@ namespace balloon_planner
     ret.scale.x = 0.1;
     ret.type = visualization_msgs::Marker::LINE_STRIP;
     ret.pose.orientation.w = 1.0;
-
+  
     geometry_msgs::Point pt1;
     pt1.x = line(3) - 50 * line(0);
     pt1.y = line(4) - 50 * line(1);
@@ -1255,14 +1189,14 @@ namespace balloon_planner
     pt2.x = pt1.x + 100 * line(0);
     pt2.y = pt1.y + 100 * line(1);
     pt2.z = pt1.z + 100 * line(2);
-
+  
     ret.points.push_back(pt1);
     ret.points.push_back(pt2);
-
+  
     return ret;
   }
   //}
-
+  
   /* to_output_message() method //{ */
   sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<cv::Point3d>& points, const std_msgs::Header& header)
   {
@@ -1271,14 +1205,14 @@ namespace balloon_planner
     ret.header = header;
     ret.height = 1;
     ret.width = n_pts;
-
+  
     {
       // Prepare the PointCloud2
       sensor_msgs::PointCloud2Modifier modifier(ret);
       modifier.setPointCloud2FieldsByString(1, "xyz");
       modifier.resize(n_pts);
     }
-
+  
     {
       // Fill the PointCloud2
       sensor_msgs::PointCloud2Iterator<float> iter_x(ret, "x");
@@ -1291,11 +1225,11 @@ namespace balloon_planner
         *iter_z = points.at(it).z;
       }
     }
-
+  
     return ret;
   }
   //}
-
+  
   /* to_output_message() method //{ */
   geometry_msgs::PointStamped BalloonPlanner::to_msg(const vec3_t& point, const std_msgs::Header& header)
   {
@@ -1307,15 +1241,15 @@ namespace balloon_planner
     return ret;
   }
   //}
-
+  
   /* plane_visualization //{ */
   visualization_msgs::MarkerArray BalloonPlanner::plane_visualization(const plane_t& plane, const std_msgs::Header& header)
   {
     visualization_msgs::MarkerArray ret;
-
+  
     const auto pos = plane.point;
     const auto quat = quat_t::FromTwoVectors(vec3_t::UnitZ(), plane.normal);
-
+  
     const double size = 20;
     geometry_msgs::Point ptA;
     ptA.x = size;
@@ -1333,82 +1267,82 @@ namespace balloon_planner
     ptD.x = size;
     ptD.y = -size;
     ptD.z = 0;
-
+  
     /* borders marker //{ */
     {
       visualization_msgs::Marker borders_marker;
       borders_marker.header = header;
-
+  
       borders_marker.ns = "borders";
       borders_marker.id = 0;
       borders_marker.type = visualization_msgs::Marker::LINE_LIST;
       borders_marker.action = visualization_msgs::Marker::ADD;
-
+  
       borders_marker.pose.position.x = pos.x();
       borders_marker.pose.position.y = pos.y();
       borders_marker.pose.position.z = pos.z();
-
+  
       borders_marker.pose.orientation.x = quat.x();
       borders_marker.pose.orientation.y = quat.y();
       borders_marker.pose.orientation.z = quat.z();
       borders_marker.pose.orientation.w = quat.w();
-
+  
       borders_marker.scale.x = 0.03;
-
+  
       borders_marker.color.a = 0.4;  // Don't forget to set the alpha!
       borders_marker.color.r = 0.0;
       borders_marker.color.g = 1.0;
       borders_marker.color.b = 0.0;
-
+  
       borders_marker.points.push_back(ptA);
       borders_marker.points.push_back(ptB);
-
+  
       borders_marker.points.push_back(ptB);
       borders_marker.points.push_back(ptC);
-
+  
       borders_marker.points.push_back(ptC);
       borders_marker.points.push_back(ptD);
-
+  
       borders_marker.points.push_back(ptD);
       borders_marker.points.push_back(ptA);
-
+  
       ret.markers.push_back(borders_marker);
     }
     //}
-
+  
     /* plane marker //{ */
     {
       visualization_msgs::Marker plane_marker;
       plane_marker.header = header;
-
+  
       plane_marker.ns = "plane";
       plane_marker.id = 1;
       plane_marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
       plane_marker.action = visualization_msgs::Marker::ADD;
-
+  
       plane_marker.pose.position.x = pos.x();
       plane_marker.pose.position.y = pos.y();
       plane_marker.pose.position.z = pos.z();
-
+  
       plane_marker.pose.orientation.x = quat.x();
       plane_marker.pose.orientation.y = quat.y();
       plane_marker.pose.orientation.z = quat.z();
       plane_marker.pose.orientation.w = quat.w();
-
+  
       plane_marker.scale.x = 1;
       plane_marker.scale.y = 1;
       plane_marker.scale.z = 1;
-
+  
       plane_marker.color.a = 0.1;  // Don't forget to set the alpha!
       plane_marker.color.r = 0.0;
       plane_marker.color.g = 1.0;
       plane_marker.color.b = 0.0;
-
+  
       // triangle ABC
       plane_marker.points.push_back(ptA);
       plane_marker.points.push_back(ptB);
       plane_marker.points.push_back(ptC);
-
+  
       // triangle ACD
       plane_marker.points.push_back(ptA);
       plane_marker.points.push_back(ptC);
@@ -1416,11 +1350,14 @@ namespace balloon_planner
       ret.markers.push_back(plane_marker);
     }
     //}
-
+  
     return ret;
   }
   //}
+  
+  //}
 
+  // | -------------------------- OTHER ------------------------- |
   /* onInit() //{ */
 
   void BalloonPlanner::onInit()
@@ -1472,6 +1409,7 @@ namespace balloon_planner
     //}
 
     pl.load_matrix_static<4, 1>("start_position", m_start_pose);
+    pl.load_matrix_static<4, 1>("landing_position", m_landing_pose);
 
     if (!pl.loaded_successfully())
     {
@@ -1521,6 +1459,7 @@ namespace balloon_planner
 
     m_srv_reset_filter = nh.serviceClient<balloon_filter::ResetEstimates>("reset_balloon_filter");
     m_srv_set_constraints = nh.serviceClient<mrs_msgs::String>("set_constraints");
+    m_srv_land_there = nh.serviceClient<mrs_msgs::ReferenceStampedSrv>("land_there");
 
     //}
 
