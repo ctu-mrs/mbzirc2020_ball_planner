@@ -105,7 +105,7 @@ namespace balloon_planner
         const bool det_valid = m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur;
         const auto time_since_last_passthrough_msg = ros::Time::now() - m_sh_ball_passthrough->last_message_time();
         const bool passthrough_valid = m_sh_ball_passthrough->has_data() && time_since_last_passthrough_msg < m_max_unseen_dur;
-        if (det_valid  || passthrough_valid)
+        if (det_valid || passthrough_valid)
         {
           ROS_WARN_STREAM("[WAITING_FOR_DETECTION]: Saw the ball, continuing!");
           m_observing_start = ros::Time::now();
@@ -124,7 +124,8 @@ namespace balloon_planner
         const auto now = ros::Time::now();
         const auto observing_dur = now - m_observing_start;
         const auto time_since_last_det_msg = now - m_sh_ball_detection->last_message_time();
-        ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(), time_since_last_det_msg.toSec());
+        ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
+                          time_since_last_det_msg.toSec());
 
         // TODO: if no detection is available, change height up and down
         vec4_t observe_pose = m_start_pose;
@@ -171,25 +172,24 @@ namespace balloon_planner
               m_sh_ball_detection->get_data();
             if (m_sh_ball_prediction->new_data())
               m_sh_ball_prediction->get_data();
+            m_prev_signed_ball_dist_set = false;
             // move to the next state
             m_state = state_enum::lurking;
-          }
-          else
+          } else
           {
-            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Waiting to reach lurk position [%.2f, %.2f, %.2f] (yaw: %.2f).", m_cur_lurk_pose_offset .x(), m_cur_lurk_pose_offset .y(),
-                              m_cur_lurk_pose_offset .z(), m_cur_lurk_pose_offset .w());
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Waiting to reach lurk position [%.2f, %.2f, %.2f] (yaw: %.2f).", m_cur_lurk_pose_offset.x(),
+                              m_cur_lurk_pose_offset.y(), m_cur_lurk_pose_offset.z(), m_cur_lurk_pose_offset.w());
           }
-        }
-        else
+        } else
         {
-          if (ball_passthrough_stamped_opt.has_value() )
+          if (ball_passthrough_stamped_opt.has_value())
           {
             vec4_t lurking_pose = ball_passthrough_stamped_opt.value().pose;
-            lurking_pose.w() += M_PI; // rotate the yaw to face the incoming ball
-            m_orig_lurk_pose = lurking_pose; // this member variable should not change throughout the lurking
-            m_cur_lurk_pose = lurking_pose;  // this will change in adaptation to the predicted ball trajectory
-            lurking_pose.z() += m_lurking_z_offset; // apply the desired offset to the z coordinate
-            m_cur_lurk_pose_offset = lurking_pose; // this is the current lurk pose, properly offset in the z coordinate
+            lurking_pose.w() += M_PI;                // rotate the yaw to face the incoming ball
+            m_orig_lurk_pose = lurking_pose;         // this member variable should not change throughout the lurking
+            m_cur_lurk_pose = lurking_pose;          // this will change in adaptation to the predicted ball trajectory
+            lurking_pose.z() += m_lurking_z_offset;  // apply the desired offset to the z coordinate
+            m_cur_lurk_pose_offset = lurking_pose;   // this is the current lurk pose, properly offset in the z coordinate
 
             std_msgs::Header header;
             header.frame_id = m_world_frame_id;
@@ -205,12 +205,12 @@ namespace balloon_planner
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
               m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
 
-            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]", lurking_pose.x(), lurking_pose.y(),
-                              lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(), m_orig_lurk_pose.z());
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]",
+                              lurking_pose.x(), lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(),
+                              m_orig_lurk_pose.z());
             m_sent_lurk_pos = true;
             m_sent_lurk_pos_stamp = ros::Time::now();
-          }
-          else
+          } else
           {
             ROS_ERROR_THROTTLE(1.0, "[GOING_TO_LURK]: Didn't get ball passthrough position! Cannot continue.");
           }
@@ -232,10 +232,20 @@ namespace balloon_planner
         if (cur_cmd_pos_yaw_opt.has_value())
         {
           const auto cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
-          const auto cur_cmd_pos = cur_cmd_pos_yaw.block<3, 1>(0, 0);
+          // TODO: remove this cheat (should be taken from cur_cmd_pos_yaw) - this is only for rosbags!
+          const auto cur_cmd_pos = m_cur_lurk_pose_offset.block<3, 1>(0, 0);
           const auto cur_time = ros::Time::now();
 
+          const auto intersect_plane = get_yz_plane(m_orig_lurk_pose);
+          if (m_pub_dbg_xy_plane.getNumSubscribers() > 0)
+            m_pub_dbg_xy_plane.publish(plane_visualization(intersect_plane, header));
+
+          // the desired interception position
           std::optional<vec4_t> intercept_pos_opt;
+          // used to detect whether the ball has already passed through the lurking position
+          // if negative then the ball is behind the YZ plane
+          std::optional<vec3_t> ball_pos_opt;
+
           if (ball_pred_opt.has_value() && !ball_pred_opt.value().predicted_path.poses.empty())
           /* if prediction is available, adapt the position accordingly //{ */
           {
@@ -245,21 +255,16 @@ namespace balloon_planner
             if (pred_path_age > m_max_unseen_dur)
             {
               ROS_WARN_THROTTLE(1.0, "[LURKING]: Predicted path is too old, ignoring it (age: %.2f > %.2f)", pred_path_age.toSec(), m_max_unseen_dur.toSec());
-            }
-            else
+            } else
             {
               const auto ball_pos = to_eigen(pred_path.poses.front().pose.position);
-              const double ball_dist = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).norm();
+              const double ball_dist = (ball_pos - cur_cmd_pos).norm();
+              ball_pos_opt = ball_pos;
               if (ball_dist > m_lurking_reaction_dist)
               {
                 ROS_INFO_THROTTLE(1.0, "[LURKING]: Ball is too far (%.2fm > %.2fm), not reacting yet.", ball_dist, m_lurking_reaction_dist);
-              }
-              else
+              } else
               {
-                const auto intersect_plane = get_yz_plane(m_orig_lurk_pose.block<3, 1>(0, 0), m_orig_lurk_pose(3));
-                if (m_pub_dbg_xy_plane.getNumSubscribers() > 0)
-                  m_pub_dbg_xy_plane.publish(plane_visualization(intersect_plane, header));
-
                 const auto intercept_point_opt = path_plane_intersection(pred_path, intersect_plane);
                 if (intercept_point_opt.has_value())
                 {
@@ -268,12 +273,11 @@ namespace balloon_planner
                   if (m_pub_dbg_int_pt.getNumSubscribers() > 0)
                     m_pub_dbg_int_pt.publish(to_msg(intercept_point, header));
 
-                  const vec3_t dir_vec = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).normalized();
+                  const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
                   const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
                   const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z() + m_lurking_z_offset, yaw);
                   intercept_pos_opt = intercept_pos;
-                }
-                else
+                } else
                 {
                   ROS_WARN_THROTTLE(1.0, "[LURKING]: Predicted trajectory doesn't intersect the XY lurking plane! Ignoring it.");
                 }
@@ -285,15 +289,15 @@ namespace balloon_planner
           /* otherwise use the detection (if available) to orient the lurker //{ */
           {
             const auto ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
-            const double ball_dist = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).norm();
+            const double ball_dist = (ball_pos - cur_cmd_pos).norm();
+            ball_pos_opt = ball_pos;
             if (ball_dist > m_lurking_reaction_dist)
             {
               ROS_INFO_THROTTLE(1.0, "[LURKING]: Ball is too far (%.2fm > %.2fm), not reacting yet.", ball_dist, m_lurking_reaction_dist);
-            }
-            else
+            } else
             {
               ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw according to detection.");
-              const vec3_t dir_vec = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).normalized();
+              const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
               const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
               intercept_pos_opt = cur_cmd_pos_yaw;
               intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset;  // set the height according to the detection height
@@ -336,6 +340,27 @@ namespace balloon_planner
 
             ROS_INFO_THROTTLE(1.0, "[LURKING]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f) - %.2fm from orig. lurk point", lurking_pose.x(),
                               lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist);
+          }
+
+          //}
+
+          /* check for passthrough and transition to the next state if detected //{ */
+
+          if (ball_pos_opt.has_value())
+          {
+            const auto ball_pos = ball_pos_opt.value();
+            const double ball_dist = (ball_pos - cur_cmd_pos).norm();
+            if (ball_dist < m_lurking_passthrough_dist)
+            {
+              const double signed_ball_dist = signed_point_plane_distance(ball_pos, intersect_plane);
+              if (m_prev_signed_ball_dist_set && mrs_lib::sign(signed_ball_dist) != mrs_lib::sign(m_prev_signed_ball_dist))
+              {
+                ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
+                // TODO: check if the ball is in the net and if so, go land
+              }
+              m_prev_signed_ball_dist = signed_ball_dist;
+              m_prev_signed_ball_dist_set = true;
+            }
           }
 
           //}
@@ -484,13 +509,21 @@ namespace balloon_planner
   /* //} */
 
   /* get_yz_plane() method //{ */
-  plane_t BalloonPlanner::get_yz_plane(const vec3_t& pos, const double yaw)
+  plane_t BalloonPlanner::get_yz_plane(const vec4_t& pose)
   {
-    const vec3_t normal(cos(yaw), sin(yaw), 0.0);
+    const vec3_t normal(cos(pose.w()), sin(pose.w()), 0.0);
     plane_t ret;
-    ret.point = pos;
+    ret.point = pose.block<3, 1>(0, 0);
     ret.normal = normal;
     return ret;
+  }
+  //}
+
+  /* signed_point_plane_distance() method //{ */
+  // returns +distance if the point is IN FRONT of the plane, -distance if the point is BEHIND the plane
+  double BalloonPlanner::signed_point_plane_distance(const vec3_t& point, const plane_t& plane)
+  {
+    return (point - plane.point).dot(plane.normal.normalized());
   }
   //}
 
@@ -527,7 +560,7 @@ namespace balloon_planner
       if (cur_coeff >= 0.0 && cur_coeff <= 1.0)
       {
         intersection = line_start + cur_coeff * line_dir;
-        break; // we're only interested in the first intersection
+        break;  // we're only interested in the first intersection
       }
       prev_end = line_end;
     }
@@ -635,7 +668,7 @@ namespace balloon_planner
 
     const quat_t quat = to_eigen(det.pose.pose.orientation);
     const auto rot_global = tf_opt.value().rotation() * quat;
-    const vec3_t x_vec = rot_global*vec3_t::UnitX();
+    const vec3_t x_vec = rot_global * vec3_t::UnitX();
     const double yaw = std::atan2(x_vec.y(), x_vec.x());
     const vec4_t pose_global = {pos_global.x(), pos_global.y(), pos_global.z(), yaw};
 
@@ -654,7 +687,7 @@ namespace balloon_planner
 
     const quat_t quat = to_eigen(det.pose.orientation);
     const auto rot_global = tf_opt.value().rotation() * quat;
-    const vec3_t x_vec = rot_global*vec3_t::UnitX();
+    const vec3_t x_vec = rot_global * vec3_t::UnitX();
     const double yaw = std::atan2(x_vec.y(), x_vec.x());
     const vec4_t pose_global = {pos_global.x(), pos_global.y(), pos_global.z(), yaw};
 
@@ -696,8 +729,8 @@ namespace balloon_planner
     // try to transform it
     if (ret.header.frame_id != m_world_frame_id)
     {
-      ROS_ERROR_THROTTLE(1.0, "[%s]: Cannot transform ball prediction message and it's not in the correct frame (expected: '%s', got '%s').", m_node_name.c_str(),
-                m_world_frame_id.c_str(), ret.header.frame_id.c_str());
+      ROS_ERROR_THROTTLE(1.0, "[%s]: Cannot transform ball prediction message and it's not in the correct frame (expected: '%s', got '%s').",
+                         m_node_name.c_str(), m_world_frame_id.c_str(), ret.header.frame_id.c_str());
       return std::nullopt;
     }
     return ret;
@@ -1188,7 +1221,7 @@ namespace balloon_planner
     ret.pose.position.x = position.x();
     ret.pose.position.y = position.y();
     ret.pose.position.z = position.z();
-    
+
     const double yaw = position.w();
     const vec3_t heading_vec(std::cos(yaw), std::sin(yaw), 0);
     const quat_t quat = mrs_lib::quaternion_between(mrs_lib::vec3_t(1.0, 0.0, 0.0), heading_vec);
@@ -1214,13 +1247,13 @@ namespace balloon_planner
     ret.pose.orientation.w = 1.0;
 
     geometry_msgs::Point pt1;
-    pt1.x = line(3) - 50*line(0);
-    pt1.y = line(4) - 50*line(1);
-    pt1.z = line(5) - 50*line(2);
+    pt1.x = line(3) - 50 * line(0);
+    pt1.y = line(4) - 50 * line(1);
+    pt1.z = line(5) - 50 * line(2);
     geometry_msgs::Point pt2;
-    pt2.x = pt1.x + 100*line(0);
-    pt2.y = pt1.y + 100*line(1);
-    pt2.z = pt1.z + 100*line(2);
+    pt2.x = pt1.x + 100 * line(0);
+    pt2.y = pt1.y + 100 * line(1);
+    pt2.z = pt1.z + 100 * line(2);
 
     ret.points.push_back(pt1);
     ret.points.push_back(pt2);
@@ -1278,7 +1311,7 @@ namespace balloon_planner
   visualization_msgs::MarkerArray BalloonPlanner::plane_visualization(const plane_t& plane, const std_msgs::Header& header)
   {
     visualization_msgs::MarkerArray ret;
-  
+
     const auto pos = plane.point;
     const auto quat = quat_t::FromTwoVectors(vec3_t::UnitZ(), plane.normal);
 
@@ -1418,6 +1451,7 @@ namespace balloon_planner
     pl.load_param("lurking/reaction_dist", m_lurking_reaction_dist);
     pl.load_param("lurking/min_last_points", m_lurking_min_last_pts);
     pl.load_param("lurking/min_last_duration", m_lurking_min_last_dur);
+    pl.load_param("lurking/passthrough_detection_distance", m_lurking_passthrough_dist);
 
     pl.load_param("constraint_states", m_constraint_states);
 

@@ -157,12 +157,11 @@ namespace balloon_planner
 
       ros::Duration m_lurking_min_observing_dur;
       double m_lurking_z_offset;
-      /* double m_lurking_observe_dist; */
       double m_lurking_reaction_dist;
       double m_lurking_max_reposition;
-      /* double m_lurking_max_reyaw; */
       int m_lurking_min_last_pts;
       ros::Duration m_lurking_min_last_dur;
+      double m_lurking_passthrough_dist;
 
       /* std::map<double, std::string> m_constraint_ranges; */
       std::map<std::string, std::string> m_constraint_states;
@@ -215,6 +214,8 @@ namespace balloon_planner
       double m_last_seen_relative_yaw;
       bool m_sent_lurk_pos;
       ros::Time m_sent_lurk_pos_stamp;
+      double m_prev_signed_ball_dist_set;
+      double m_prev_signed_ball_dist;
 
       // --------------------------------------------------------------
       // |                helper implementation methods               |
@@ -241,7 +242,8 @@ namespace balloon_planner
       std::optional<balloon_filter::BallPrediction> get_ball_prediction();
 
       vec4_t choose_lurking_pose(const std::vector<pose_stamped_t>& ball_positions);
-      plane_t get_yz_plane(const vec3_t& pos, const double yaw);
+      plane_t get_yz_plane(const vec4_t& pose);
+      double signed_point_plane_distance(const vec3_t& point, const plane_t& plane);
       std::optional<vec3_t> path_plane_intersection(const path_t& path, const plane_t& plane);
 
       path_t offset_path(const path_t& path, const vec3_t& off_vec);
