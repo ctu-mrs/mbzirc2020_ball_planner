@@ -217,6 +217,10 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'LURKING'");
         /*  //{ */
 
+        std_msgs::Header header;
+        header.frame_id = m_world_frame_id;
+        header.stamp = ros::Time::now();
+
         const auto cur_cmd_pos_yaw_opt = get_uav_cmd_position();
         if (cur_cmd_pos_yaw_opt.has_value())
         {
@@ -237,6 +241,11 @@ namespace balloon_planner
             }
             const auto intersect_plane = get_yz_plane(cur_cmd_pos, cur_cmd_pos_yaw(3));
             auto intercept_point = path_plane_intersection(pred_path, intersect_plane);
+
+            if (m_pub_dbg_xy_plane.getNumSubscribers() > 0)
+              m_pub_dbg_xy_plane.publish(plane_visualization(intersect_plane, header));
+            if (m_pub_dbg_int_pt.getNumSubscribers() > 0)
+              m_pub_dbg_int_pt.publish(to_msg(intercept_point, header));
 
             const auto ball_pos = to_eigen(pred_path.poses.front().pose.position);
             const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
@@ -1200,6 +1209,131 @@ namespace balloon_planner
   }
   //}
 
+  /* to_output_message() method //{ */
+  geometry_msgs::PointStamped BalloonPlanner::to_msg(const vec3_t& point, const std_msgs::Header& header)
+  {
+    geometry_msgs::PointStamped ret;
+    ret.header = header;
+    ret.point.x = point.x();
+    ret.point.y = point.y();
+    ret.point.z = point.z();
+    return ret;
+  }
+  //}
+
+  /* plane_visualization //{ */
+  visualization_msgs::MarkerArray BalloonPlanner::plane_visualization(const plane_t& plane, const std_msgs::Header& header)
+  {
+    visualization_msgs::MarkerArray ret;
+  
+    const auto pos = plane.point;
+    const auto quat = quat_t::FromTwoVectors(vec3_t::UnitZ(), plane.normal);
+
+    const double size = 20;
+    geometry_msgs::Point ptA;
+    ptA.x = size;
+    ptA.y = size;
+    ptA.z = 0;
+    geometry_msgs::Point ptB;
+    ptB.x = -size;
+    ptB.y = size;
+    ptB.z = 0;
+    geometry_msgs::Point ptC;
+    ptC.x = -size;
+    ptC.y = -size;
+    ptC.z = 0;
+    geometry_msgs::Point ptD;
+    ptD.x = size;
+    ptD.y = -size;
+    ptD.z = 0;
+
+    /* borders marker //{ */
+    {
+      visualization_msgs::Marker borders_marker;
+      borders_marker.header = header;
+
+      borders_marker.ns = "borders";
+      borders_marker.id = 0;
+      borders_marker.type = visualization_msgs::Marker::LINE_LIST;
+      borders_marker.action = visualization_msgs::Marker::ADD;
+
+      borders_marker.pose.position.x = pos.x();
+      borders_marker.pose.position.y = pos.y();
+      borders_marker.pose.position.z = pos.z();
+
+      borders_marker.pose.orientation.x = quat.x();
+      borders_marker.pose.orientation.y = quat.y();
+      borders_marker.pose.orientation.z = quat.z();
+      borders_marker.pose.orientation.w = quat.w();
+
+      borders_marker.scale.x = 0.03;
+
+      borders_marker.color.a = 0.4;  // Don't forget to set the alpha!
+      borders_marker.color.r = 0.0;
+      borders_marker.color.g = 1.0;
+      borders_marker.color.b = 0.0;
+
+      borders_marker.points.push_back(ptA);
+      borders_marker.points.push_back(ptB);
+
+      borders_marker.points.push_back(ptB);
+      borders_marker.points.push_back(ptC);
+
+      borders_marker.points.push_back(ptC);
+      borders_marker.points.push_back(ptD);
+
+      borders_marker.points.push_back(ptD);
+      borders_marker.points.push_back(ptA);
+
+      ret.markers.push_back(borders_marker);
+    }
+    //}
+
+    /* plane marker //{ */
+    {
+      visualization_msgs::Marker plane_marker;
+      plane_marker.header = header;
+
+      plane_marker.ns = "plane";
+      plane_marker.id = 1;
+      plane_marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
+      plane_marker.action = visualization_msgs::Marker::ADD;
+
+      plane_marker.pose.position.x = pos.x();
+      plane_marker.pose.position.y = pos.y();
+      plane_marker.pose.position.z = pos.z();
+
+      plane_marker.pose.orientation.x = quat.x();
+      plane_marker.pose.orientation.y = quat.y();
+      plane_marker.pose.orientation.z = quat.z();
+      plane_marker.pose.orientation.w = quat.w();
+
+      plane_marker.scale.x = 1;
+      plane_marker.scale.y = 1;
+      plane_marker.scale.z = 1;
+
+      plane_marker.color.a = 0.1;  // Don't forget to set the alpha!
+      plane_marker.color.r = 0.0;
+      plane_marker.color.g = 1.0;
+      plane_marker.color.b = 0.0;
+
+      // triangle ABC
+      plane_marker.points.push_back(ptA);
+      plane_marker.points.push_back(ptB);
+      plane_marker.points.push_back(ptC);
+
+      // triangle ACD
+      plane_marker.points.push_back(ptA);
+      plane_marker.points.push_back(ptC);
+      plane_marker.points.push_back(ptD);
+      ret.markers.push_back(plane_marker);
+    }
+    //}
+
+    return ret;
+  }
+  //}
+
   /* onInit() //{ */
 
   void BalloonPlanner::onInit()
@@ -1292,6 +1426,8 @@ namespace balloon_planner
     m_pub_dbg_ball_positions = nh.advertise<sensor_msgs::PointCloud2>("ball_positions", 1);
     m_pub_dbg_lurking_points = nh.advertise<sensor_msgs::PointCloud2>("lurking_points", 1, true);
     m_pub_dbg_lurking_position = nh.advertise<geometry_msgs::PoseStamped>("lurking_position", 1, true);
+    m_pub_dbg_xy_plane = nh.advertise<visualization_msgs::MarkerArray>("yz_plane", 1);
+    m_pub_dbg_int_pt = nh.advertise<geometry_msgs::PointStamped>("intersection_point", 1);
     m_pub_dbg_linefit = nh.advertise<visualization_msgs::Marker>("line_fit", 1, true);
     m_pub_dbg_linefit_pts = nh.advertise<sensor_msgs::PointCloud2>("line_fit_pts", 1, true);
 

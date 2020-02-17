@@ -185,8 +185,12 @@ namespace balloon_planner
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
       ros::Publisher m_pub_dbg_ball_positions;
+
       ros::Publisher m_pub_dbg_lurking_points;
       ros::Publisher m_pub_dbg_lurking_position;
+      ros::Publisher m_pub_dbg_xy_plane;
+      ros::Publisher m_pub_dbg_int_pt;
+
       ros::Publisher m_pub_dbg_linefit;
       ros::Publisher m_pub_dbg_linefit_pts;
 
@@ -253,8 +257,10 @@ namespace balloon_planner
       traj_t point_to_traj(const vec3_t& point, const size_t n_pts);
       sensor_msgs::PointCloud2 to_output_message(const std::vector<pose_stamped_t>& points, const std_msgs::Header& header);
       geometry_msgs::PoseStamped to_output_message(const vec4_t& position, const std_msgs::Header& header);
-      visualization_msgs::Marker to_output_message(const cv::Vec6f& line, const std_msgs::Header& header);
       sensor_msgs::PointCloud2 to_output_message(const std::vector<cv::Point3d>& points, const std_msgs::Header& header);
+      visualization_msgs::Marker to_output_message(const cv::Vec6f& line, const std_msgs::Header& header);
+      geometry_msgs::PointStamped to_msg(const vec3_t& point, const std_msgs::Header& header);
+      visualization_msgs::MarkerArray plane_visualization(const plane_t& plane, const std_msgs::Header& header);
 
       path_t traj_to_path(const traj_t& traj, const double traj_dt);
       traj_t path_to_traj(const path_t& path);
