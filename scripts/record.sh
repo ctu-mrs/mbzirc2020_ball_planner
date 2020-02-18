@@ -15,6 +15,9 @@ exclude=(
 '/$(arg UAV_NAME)/bluefox3_front/image_raw'
 '/$(arg UAV_NAME)/bluefox3_front/image_raw/compressed/(.*)'
 '/$(arg UAV_NAME)/bluefox3_front/image_raw/compressedDepth(.*)'
+#bluefox net
+'/$(arg UAV_NAME)/bluefox_net/image_raw'
+'/$(arg UAV_NAME)/bluefox_net/image_raw/compressedDepth(.*)'
 # Realsense t265
 '/$(arg UAV_NAME)/rs_t265/fisheye(.*)'
 # Realsesne d435
