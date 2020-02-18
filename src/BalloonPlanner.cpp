@@ -96,7 +96,7 @@ namespace balloon_planner
         // TODO: also probably some sweeping
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
-        result_traj.header.stamp = ros::Time::now();
+        result_traj.header.stamp = ros::Time(0); // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
         add_point_to_trajectory(m_start_pose, result_traj);
@@ -138,7 +138,7 @@ namespace balloon_planner
 
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
-        result_traj.header.stamp = ros::Time::now();
+        result_traj.header.stamp = ros::Time(0); // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
         add_point_to_trajectory(m_start_pose, result_traj);
@@ -196,14 +196,15 @@ namespace balloon_planner
             header.stamp = ros::Time::now();
             m_pub_dbg_lurking_position.publish(to_output_message(lurking_pose, header));
 
-            traj_t intercept_traj;
-            add_point_to_trajectory(lurking_pose, intercept_traj);
-            intercept_traj.header = header;
-            intercept_traj.use_yaw = true;
-            intercept_traj.fly_now = true;
-            m_pub_cmd_traj.publish(intercept_traj);
+            traj_t result_traj;
+            add_point_to_trajectory(lurking_pose, result_traj);
+            result_traj.header = header;
+            result_traj.header.stamp = ros::Time(0); // just fly now
+            result_traj.use_yaw = true;
+            result_traj.fly_now = true;
+            m_pub_cmd_traj.publish(result_traj);
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
-              m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
+              m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
 
             ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]",
                               lurking_pose.x(), lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(),
@@ -328,15 +329,16 @@ namespace balloon_planner
             m_cur_lurk_pose_offset = lurking_pose;
             m_cur_lurk_pose = lurking_pose - vec4_t(0, 0, m_lurking_z_offset, 0);
 
-            traj_t intercept_traj;
-            add_point_to_trajectory(lurking_pose, intercept_traj);
-            intercept_traj.header.frame_id = m_world_frame_id;
-            intercept_traj.header.stamp = cur_time;
-            intercept_traj.use_yaw = true;
-            intercept_traj.fly_now = true;
-            m_pub_cmd_traj.publish(intercept_traj);
+            traj_t result_traj;
+            add_point_to_trajectory(lurking_pose, result_traj);
+            result_traj.header.frame_id = m_world_frame_id;
+            result_traj.header.stamp = ros::Time(0); // just fly now
+            result_traj.header.stamp = cur_time;
+            result_traj.use_yaw = true;
+            result_traj.fly_now = true;
+            m_pub_cmd_traj.publish(result_traj);
             if (m_pub_dbg_traj.getNumSubscribers() > 0)
-              m_pub_dbg_traj.publish(traj_to_path(intercept_traj, m_trajectory_sampling_dt));
+              m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
 
             ROS_INFO_THROTTLE(1.0, "[LURKING]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f) - %.2fm from orig. lurk point", lurking_pose.x(),
                               lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist);
