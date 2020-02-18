@@ -52,6 +52,12 @@ namespace balloon_planner
   {
     load_dynparams(m_drmgr_ptr->config);
 
+    if (!m_initialized)
+    {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: NOT INITIALIZED");
+      return;
+    }
+
     if (!m_activated)
     {
       ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: INACTIVE");
@@ -96,7 +102,7 @@ namespace balloon_planner
         // TODO: also probably some sweeping
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
-        result_traj.header.stamp = ros::Time(0); // just fly now
+        result_traj.header.stamp = ros::Time(0);  // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
         add_point_to_trajectory(m_start_pose, result_traj);
@@ -138,7 +144,7 @@ namespace balloon_planner
 
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
-        result_traj.header.stamp = ros::Time(0); // just fly now
+        result_traj.header.stamp = ros::Time(0);  // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
         add_point_to_trajectory(m_start_pose, result_traj);
@@ -199,7 +205,7 @@ namespace balloon_planner
             traj_t result_traj;
             add_point_to_trajectory(lurking_pose, result_traj);
             result_traj.header = header;
-            result_traj.header.stamp = ros::Time(0); // just fly now
+            result_traj.header.stamp = ros::Time(0);  // just fly now
             result_traj.use_yaw = true;
             result_traj.fly_now = true;
             m_pub_cmd_traj.publish(result_traj);
@@ -332,7 +338,7 @@ namespace balloon_planner
             traj_t result_traj;
             add_point_to_trajectory(lurking_pose, result_traj);
             result_traj.header.frame_id = m_world_frame_id;
-            result_traj.header.stamp = ros::Time(0); // just fly now
+            result_traj.header.stamp = ros::Time(0);  // just fly now
             result_traj.header.stamp = cur_time;
             result_traj.use_yaw = true;
             result_traj.fly_now = true;
@@ -386,6 +392,31 @@ namespace balloon_planner
     }
 
     //}
+  }
+  //}
+
+  /* delayed_init() method //{ */
+  void BalloonPlanner::delayed_init([[maybe_unused]] const ros::TimerEvent& evt)
+  {
+
+    /* transform drop zone  //{ */
+
+    {
+      const auto tf_opt = get_transform_to_world(m_arena_frame_id, ros::Time::now());
+      if (!tf_opt.has_value())
+        return;
+
+      const vec3_t tmp = tf_opt.value()*vec3_t(m_land_zone.x(), m_land_zone.y(), 0.0);
+      m_landing_pose.block<3, 1>(0, 0) = tmp;
+      m_landing_pose.z() = m_landing_height;
+      m_landing_pose.w() = 0.0;
+    }
+
+
+    //}
+
+    m_initialized = true;
+    m_delayed_init_timer.stop();
   }
   //}
 
@@ -1115,7 +1146,7 @@ namespace balloon_planner
 
   // | ------------------ Visualization methods ----------------- |
   /* methods //{ */
-  
+
   /* to_output_message() method //{ */
   sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<pose_stamped_t>& points, const std_msgs::Header& header)
   {
@@ -1124,14 +1155,14 @@ namespace balloon_planner
     ret.header = header;
     ret.height = 1;
     ret.width = n_pts;
-  
+
     {
       // Prepare the PointCloud2
       sensor_msgs::PointCloud2Modifier modifier(ret);
       modifier.setPointCloud2FieldsByString(1, "xyz");
       modifier.resize(n_pts);
     }
-  
+
     {
       // Fill the PointCloud2
       sensor_msgs::PointCloud2Iterator<float> iter_x(ret, "x");
@@ -1144,34 +1175,34 @@ namespace balloon_planner
         *iter_z = points.at(it).pose.z();
       }
     }
-  
+
     return ret;
   }
   //}
-  
+
   /* to_output_message() method //{ */
   geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const vec4_t& position, const std_msgs::Header& header)
   {
     geometry_msgs::PoseStamped ret;
     ret.header = header;
-  
+
     ret.pose.position.x = position.x();
     ret.pose.position.y = position.y();
     ret.pose.position.z = position.z();
-  
+
     const double yaw = position.w();
     const vec3_t heading_vec(std::cos(yaw), std::sin(yaw), 0);
     const quat_t quat = mrs_lib::quaternion_between(mrs_lib::vec3_t(1.0, 0.0, 0.0), heading_vec);
-  
+
     ret.pose.orientation.x = quat.x();
     ret.pose.orientation.y = quat.y();
     ret.pose.orientation.z = quat.z();
     ret.pose.orientation.w = quat.w();
-  
+
     return ret;
   }
   //}
-  
+
   /* to_output_message() method //{ */
   visualization_msgs::Marker BalloonPlanner::to_output_message(const cv::Vec6f& line, const std_msgs::Header& header)
   {
@@ -1182,7 +1213,7 @@ namespace balloon_planner
     ret.scale.x = 0.1;
     ret.type = visualization_msgs::Marker::LINE_STRIP;
     ret.pose.orientation.w = 1.0;
-  
+
     geometry_msgs::Point pt1;
     pt1.x = line(3) - 50 * line(0);
     pt1.y = line(4) - 50 * line(1);
@@ -1191,14 +1222,14 @@ namespace balloon_planner
     pt2.x = pt1.x + 100 * line(0);
     pt2.y = pt1.y + 100 * line(1);
     pt2.z = pt1.z + 100 * line(2);
-  
+
     ret.points.push_back(pt1);
     ret.points.push_back(pt2);
-  
+
     return ret;
   }
   //}
-  
+
   /* to_output_message() method //{ */
   sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<cv::Point3d>& points, const std_msgs::Header& header)
   {
@@ -1207,14 +1238,14 @@ namespace balloon_planner
     ret.header = header;
     ret.height = 1;
     ret.width = n_pts;
-  
+
     {
       // Prepare the PointCloud2
       sensor_msgs::PointCloud2Modifier modifier(ret);
       modifier.setPointCloud2FieldsByString(1, "xyz");
       modifier.resize(n_pts);
     }
-  
+
     {
       // Fill the PointCloud2
       sensor_msgs::PointCloud2Iterator<float> iter_x(ret, "x");
@@ -1227,11 +1258,11 @@ namespace balloon_planner
         *iter_z = points.at(it).z;
       }
     }
-  
+
     return ret;
   }
   //}
-  
+
   /* to_output_message() method //{ */
   geometry_msgs::PointStamped BalloonPlanner::to_msg(const vec3_t& point, const std_msgs::Header& header)
   {
@@ -1243,15 +1274,15 @@ namespace balloon_planner
     return ret;
   }
   //}
-  
+
   /* plane_visualization //{ */
   visualization_msgs::MarkerArray BalloonPlanner::plane_visualization(const plane_t& plane, const std_msgs::Header& header)
   {
     visualization_msgs::MarkerArray ret;
-  
+
     const auto pos = plane.point;
     const auto quat = quat_t::FromTwoVectors(vec3_t::UnitZ(), plane.normal);
-  
+
     const double size = 20;
     geometry_msgs::Point ptA;
     ptA.x = size;
@@ -1269,82 +1300,82 @@ namespace balloon_planner
     ptD.x = size;
     ptD.y = -size;
     ptD.z = 0;
-  
+
     /* borders marker //{ */
     {
       visualization_msgs::Marker borders_marker;
       borders_marker.header = header;
-  
+
       borders_marker.ns = "borders";
       borders_marker.id = 0;
       borders_marker.type = visualization_msgs::Marker::LINE_LIST;
       borders_marker.action = visualization_msgs::Marker::ADD;
-  
+
       borders_marker.pose.position.x = pos.x();
       borders_marker.pose.position.y = pos.y();
       borders_marker.pose.position.z = pos.z();
-  
+
       borders_marker.pose.orientation.x = quat.x();
       borders_marker.pose.orientation.y = quat.y();
       borders_marker.pose.orientation.z = quat.z();
       borders_marker.pose.orientation.w = quat.w();
-  
+
       borders_marker.scale.x = 0.03;
-  
+
       borders_marker.color.a = 0.4;  // Don't forget to set the alpha!
       borders_marker.color.r = 0.0;
       borders_marker.color.g = 1.0;
       borders_marker.color.b = 0.0;
-  
+
       borders_marker.points.push_back(ptA);
       borders_marker.points.push_back(ptB);
-  
+
       borders_marker.points.push_back(ptB);
       borders_marker.points.push_back(ptC);
-  
+
       borders_marker.points.push_back(ptC);
       borders_marker.points.push_back(ptD);
-  
+
       borders_marker.points.push_back(ptD);
       borders_marker.points.push_back(ptA);
-  
+
       ret.markers.push_back(borders_marker);
     }
     //}
-  
+
     /* plane marker //{ */
     {
       visualization_msgs::Marker plane_marker;
       plane_marker.header = header;
-  
+
       plane_marker.ns = "plane";
       plane_marker.id = 1;
       plane_marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
       plane_marker.action = visualization_msgs::Marker::ADD;
-  
+
       plane_marker.pose.position.x = pos.x();
       plane_marker.pose.position.y = pos.y();
       plane_marker.pose.position.z = pos.z();
-  
+
       plane_marker.pose.orientation.x = quat.x();
       plane_marker.pose.orientation.y = quat.y();
       plane_marker.pose.orientation.z = quat.z();
       plane_marker.pose.orientation.w = quat.w();
-  
+
       plane_marker.scale.x = 1;
       plane_marker.scale.y = 1;
       plane_marker.scale.z = 1;
-  
+
       plane_marker.color.a = 0.1;  // Don't forget to set the alpha!
       plane_marker.color.r = 0.0;
       plane_marker.color.g = 1.0;
       plane_marker.color.b = 0.0;
-  
+
       // triangle ABC
       plane_marker.points.push_back(ptA);
       plane_marker.points.push_back(ptB);
       plane_marker.points.push_back(ptC);
-  
+
       // triangle ACD
       plane_marker.points.push_back(ptA);
       plane_marker.points.push_back(ptC);
@@ -1352,11 +1383,11 @@ namespace balloon_planner
       ret.markers.push_back(plane_marker);
     }
     //}
-  
+
     return ret;
   }
   //}
-  
+
   //}
 
   // | -------------------------- OTHER ------------------------- |
@@ -1381,6 +1412,7 @@ namespace balloon_planner
     const double planning_period = pl.load_param2<double>("planning_period");
 
     pl.load_param("world_frame_id", m_world_frame_id);
+    pl.load_param("arena_frame_id", m_arena_frame_id);
     pl.load_param("max_unseen_duration", m_max_unseen_dur);
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
@@ -1410,8 +1442,8 @@ namespace balloon_planner
 
     //}
 
+    pl.load_matrix_static<2, 1>("dropoff_center", m_land_zone);
     pl.load_matrix_static<4, 1>("start_position", m_start_pose);
-    pl.load_matrix_static<4, 1>("landing_position", m_landing_pose);
 
     if (!pl.loaded_successfully())
     {
@@ -1474,6 +1506,7 @@ namespace balloon_planner
     /* timers  //{ */
 
     m_main_loop_timer = nh.createTimer(ros::Duration(planning_period), &BalloonPlanner::main_loop, this);
+    m_delayed_init_timer = nh.createTimer(ros::Duration(1.0), &BalloonPlanner::delayed_init, this);
 
     //}
 

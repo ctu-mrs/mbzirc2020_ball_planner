@@ -1,3 +1,4 @@
+land_at_end: true
 
 planning_period: 0.1 # seconds
 
@@ -44,10 +45,11 @@ start_position:
     -0.1    # yaw (radians)
   ]
 
-landing_position:
-  [
-    -30.0,   # x coordinate (metres)
-    0.0,  # y coordinate (metres)
-    5.0,   # z coordinate (metres)
-    0.0    # yaw (radians)
-  ]
+## ############### NOW SPECIFIED IN THE WORLD FILE ###############
+# landing_position:
+#   [
+#     -30.0,   # x coordinate (metres)
+#     0.0,  # y coordinate (metres)
+#     5.0,   # z coordinate (metres)
+#     0.0    # yaw (radians)
+#   ]

@@ -123,7 +123,7 @@ namespace balloon_planner
   class BalloonPlanner : public nodelet::Nodelet
   {
     public:
-      BalloonPlanner() : m_node_name("BalloonPlanner"), m_activated(false) {};
+      BalloonPlanner() : m_node_name("BalloonPlanner"), m_initialized(false), m_activated(false) {};
       virtual void onInit();
 
       bool m_is_initialized;
@@ -131,6 +131,7 @@ namespace balloon_planner
     private:
       const std::string m_node_name;
       void main_loop([[maybe_unused]] const ros::TimerEvent& evt);
+      void delayed_init([[maybe_unused]] const ros::TimerEvent& evt);
 
     private:
       std::unique_ptr<mrs_lib::Profiler> m_profiler_ptr;
@@ -143,6 +144,11 @@ namespace balloon_planner
 
       /* Parameters, loaded from ROS //{ */
       std::string m_world_frame_id;
+      std::string m_arena_frame_id;
+
+      bool m_land_at_end;
+      vec2_t m_land_zone;
+      double m_landing_height;
 
       double m_approach_speed;
       double m_chase_speed;
@@ -200,11 +206,13 @@ namespace balloon_planner
       ros::ServiceClient m_srv_land_there;
 
       ros::Timer m_main_loop_timer;
+      ros::Timer m_delayed_init_timer;
       //}
 
       size_t m_max_pts;
 
     private:
+      bool m_initialized;
       bool m_activated;
       state_t m_state;
       double m_path_offset;
