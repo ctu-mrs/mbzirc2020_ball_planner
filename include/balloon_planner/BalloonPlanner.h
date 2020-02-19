@@ -106,6 +106,32 @@ namespace balloon_planner
   
   //}
 
+  namespace strat_enum
+  {
+    enum strat_t
+    {
+      lurk_arc_endpose,
+      lurk_most_probable,
+      lurk_lowest,
+      unknown
+    };
+  }
+  using strat_t = strat_enum::strat_t;
+  /* to_string //{ */
+  
+  std::string to_string(const strat_t strat)
+  {
+    switch (strat)
+    {
+      case strat_t::lurk_arc_endpose: return "lurk_arc_endpose";
+      case strat_t::lurk_most_probable: return "lurk_most_probable";
+      case strat_t::lurk_lowest: return "lurk_lowes";
+      default: return "unknown strategy";
+    }
+  }
+  
+  //}
+
   struct plane_t
   {
     vec3_t point;
@@ -150,23 +176,24 @@ namespace balloon_planner
       vec2_t m_land_zone;
       double m_landing_height;
 
-      double m_approach_speed;
-      double m_chase_speed;
+      double m_pogo_min_height;
+      double m_pogo_max_height;
+      double m_pogo_speed;
+
       ros::Duration m_max_unseen_dur;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
 
       vec4_t m_start_pose;
-      double m_target_offset;
 
       double m_yawing_max_ball_dist;
 
       ros::Duration m_lurking_min_observing_dur;
-      double m_lurking_z_offset;
       double m_lurking_reaction_dist;
       double m_lurking_max_reposition;
       int m_lurking_min_last_pts;
+      double m_lurking_z_offset;
       ros::Duration m_lurking_min_last_dur;
       double m_lurking_passthrough_dist;
 
@@ -214,8 +241,17 @@ namespace balloon_planner
     private:
       bool m_initialized;
       bool m_activated;
+
       state_t m_state;
-      double m_path_offset;
+      strat_t m_strat;
+
+      // | -------------------------- pogo -------------------------- |
+      double m_pogo_prev_height;
+      double m_pogo_height_range;
+      double m_pogo_direction;
+      ros::Time m_pogo_prev_time;
+
+      // | ----------------------- other shit ----------------------- |
       ros::Time m_observing_start;
       std::vector<pose_stamped_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;       // the original lurking pose

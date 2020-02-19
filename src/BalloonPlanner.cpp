@@ -100,12 +100,21 @@ namespace balloon_planner
         ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_pose.transpose() << "]");
         // TODO: change the height until we get a detection
         // TODO: also probably some sweeping
+        // | ------------------- POGO POGO POGO POGO ------------------ |
+        const double pogo_dt = (ros::Time::now() - m_pogo_prev_time).toSec();
+        const double pogo_height = std::clamp(m_pogo_prev_height + m_pogo_direction*pogo_dt*m_pogo_speed, m_pogo_min_height, m_pogo_max_height);
+        if (pogo_height == m_pogo_min_height)
+          m_pogo_direction = 1.0;
+        else if (pogo_height == m_pogo_min_height)
+          m_pogo_direction = -1.0;
+
+        const vec4_t new_pose(m_start_pose.x(), m_start_pose.y(), pogo_height, m_start_pose.w());
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time(0);  // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_pose, result_traj);
+        add_point_to_trajectory(new_pose, result_traj);
         m_pub_cmd_traj.publish(result_traj);
 
         const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
@@ -574,11 +583,8 @@ namespace balloon_planner
     m_lurking_max_reposition = cfg.lurking__max_reposition;
     /* m_lurking_max_reyaw = cfg.lurking__max_reyaw; */
 
-    m_target_offset = cfg.trajectory__target_offset;
     m_trajectory_horizon = cfg.trajectory__horizon;
     m_max_pts = std::floor(m_trajectory_horizon / m_trajectory_sampling_dt);
-    m_approach_speed = cfg.approach_speed;
-    m_chase_speed = cfg.chase_speed;
   }
   //}
 
@@ -1417,6 +1423,10 @@ namespace balloon_planner
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
 
+    pl.load_param("pogo/min_height", m_pogo_min_height);
+    pl.load_param("pogo/max_height", m_pogo_max_height);
+    pl.load_param("pogo/speed", m_pogo_speed);
+
     /* pl.load_param("lurking/observe_dist", m_lurking_observe_dist); */
     pl.load_param("lurking/reaction_dist", m_lurking_reaction_dist);
     pl.load_param("lurking/min_last_points", m_lurking_min_last_pts);
@@ -1443,6 +1453,7 @@ namespace balloon_planner
     //}
 
     pl.load_matrix_static<2, 1>("dropoff_center", m_land_zone);
+    pl.load_param("landing_height", m_landing_height);
     pl.load_matrix_static<4, 1>("start_position", m_start_pose);
 
     if (!pl.loaded_successfully())
@@ -1513,6 +1524,11 @@ namespace balloon_planner
     m_ball_positions.reserve(200);
     m_state = state_enum::waiting_for_detection;
 
+    m_pogo_direction = 1.0;
+    m_pogo_prev_height = m_pogo_min_height;
+    m_pogo_prev_time = ros::Time::now();
+    m_pogo_height_range = m_pogo_max_height - m_pogo_min_height;
+
     ROS_INFO("[%s]: initialized", m_node_name.c_str());
   }
 
@@ -1523,9 +1539,17 @@ namespace balloon_planner
   bool BalloonPlanner::start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp)
   {
     if (m_activated)
-      resp.message = "State machine already active! Thank you for number " + std::to_string(req.value);
+      resp.message = "State machine already active! Got '" + std::to_string(req.value) + "'.";
     else
-      resp.message = "Activated state machine. Thank you for number " + std::to_string(req.value);
+      resp.message = "Activated state machine. Got '" + std::to_string(req.value) + "'.";
+    switch (req.value)
+    {
+      case 0: m_strat = strat_t::lurk_arc_endpose; break;
+      case 1: m_strat = strat_t::lurk_most_probable; break;
+      case 2: m_strat = strat_t::lurk_lowest; break;
+      default: m_strat = strat_t::unknown; break;
+    }
+    resp.message += " Selected strategy: '" + to_string(m_strat) + "'.";
     m_activated = true;
     resp.success = true;
     return true;
