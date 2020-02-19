@@ -16,7 +16,7 @@ windows:
   - spawn:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-realsense-front --enable-bluefox-front --file spawn62.csv
+        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --file spawn62.csv
         - export UAV_NAME=uav60; waitForSimulation; spawn 60 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ball-holder --file spawn60.csv
   - control:
       layout: even-vertical

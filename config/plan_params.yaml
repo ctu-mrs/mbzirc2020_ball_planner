@@ -19,7 +19,7 @@ lurking:
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_offset: 5.0 # metres
+  target_reached_distance: 1.0 # metre - at this distance from the target point it is considered to be reached
 
 pogo:
   min_height: 5.5 # metres

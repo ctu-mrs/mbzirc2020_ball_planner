@@ -76,6 +76,7 @@ namespace balloon_planner
     enum state_t
     {
       /* lost_glancing, */
+      going_to_nextpos,
       waiting_for_detection,
       observing,
       /* yawing_detection, */
@@ -93,6 +94,7 @@ namespace balloon_planner
     switch (state)
     {
       /* case state_t::lost_glancing: return "lost_glancing"; */
+      case state_t::going_to_nextpos: return "going_to_nextpos";
       case state_t::waiting_for_detection: return "waiting_for_detection";
       case state_t::observing: return "observing";
       /* case state_t::yawing_detection: return "yawing_detection"; */
@@ -184,6 +186,7 @@ namespace balloon_planner
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
+      double m_trajectory_tgt_reached_dist;
 
       vec4_t m_start_pose;
 

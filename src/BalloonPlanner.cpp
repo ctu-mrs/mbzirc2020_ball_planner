@@ -92,21 +92,51 @@ namespace balloon_planner
 
     switch (m_state)
     {
+      case state_enum::going_to_nextpos:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOINT_TO_NEXTPOS'");
+        traj_t result_traj;
+        result_traj.header.frame_id = m_world_frame_id;
+        result_traj.header.stamp = ros::Time(0);  // just fly now
+        result_traj.use_yaw = true;
+        result_traj.fly_now = true;
+        add_point_to_trajectory(m_start_pose, result_traj);
+        m_pub_cmd_traj.publish(result_traj);
+
+        ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS]: Going to start point [" << m_start_pose.transpose() << "]");
+        if (cur_pos_yaw_opt.has_value())
+        {
+          const auto cur_pos_yaw = cur_pos_yaw_opt.value();
+          const auto cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
+          const auto start_pos = m_start_pose.block<3, 1>(0, 0);
+          const double des_pos_dist = (start_pos - cur_pos).norm();
+
+          ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS]: Distance from start point: " << des_pos_dist << "m/" << m_trajectory_tgt_reached_dist << "m.");
+          if (des_pos_dist < m_trajectory_tgt_reached_dist)
+          {
+            ROS_WARN_STREAM("[GOINT_TO_NEXTPOS]: Reached target position, continuing!");
+            m_state = state_enum::waiting_for_detection;
+          }
+        }
+      }
+      break;
       case state_enum::waiting_for_detection:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_DETECTION'");
         /*  //{ */
 
-        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Going to start point [" << m_start_pose.transpose() << "]");
         // TODO: change the height until we get a detection
         // TODO: also probably some sweeping
         // | ------------------- POGO POGO POGO POGO ------------------ |
         const double pogo_dt = (ros::Time::now() - m_pogo_prev_time).toSec();
         const double pogo_height = std::clamp(m_pogo_prev_height + m_pogo_direction*pogo_dt*m_pogo_speed, m_pogo_min_height, m_pogo_max_height);
+        m_pogo_prev_height = pogo_height;
+        m_pogo_prev_time = ros::Time::now();
         if (pogo_height == m_pogo_min_height)
           m_pogo_direction = 1.0;
-        else if (pogo_height == m_pogo_min_height)
+        else if (pogo_height == m_pogo_max_height)
           m_pogo_direction = -1.0;
+        ROS_INFO_STREAM_THROTTLE(1.0, "[WAITING_FOR_DETECTION]: Waiting for detection at pogo height: " << pogo_height << "m from [" << m_pogo_min_height << "," << m_pogo_max_height << "], direction: " << m_pogo_direction);
 
         const vec4_t new_pose(m_start_pose.x(), m_start_pose.y(), pogo_height, m_start_pose.w());
         traj_t result_traj;
@@ -1422,6 +1452,7 @@ namespace balloon_planner
     pl.load_param("max_unseen_duration", m_max_unseen_dur);
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
+    pl.load_param("trajectory/target_reached_distance", m_trajectory_tgt_reached_dist);
 
     pl.load_param("pogo/min_height", m_pogo_min_height);
     pl.load_param("pogo/max_height", m_pogo_max_height);
@@ -1522,7 +1553,7 @@ namespace balloon_planner
     //}
 
     m_ball_positions.reserve(200);
-    m_state = state_enum::waiting_for_detection;
+    m_state = state_enum::going_to_nextpos;
 
     m_pogo_direction = 1.0;
     m_pogo_prev_height = m_pogo_min_height;
