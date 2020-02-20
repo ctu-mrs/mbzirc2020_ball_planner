@@ -4,4 +4,4 @@ takeoff:
 
     controller: "So3Controller"
 
-  takeoff_height: 2.5
+  takeoff_height: 5.5
