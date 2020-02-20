@@ -76,6 +76,7 @@ namespace balloon_planner
     enum state_t
     {
       /* lost_glancing, */
+      going_to_nextpos,
       waiting_for_detection,
       observing,
       /* yawing_detection, */
@@ -93,6 +94,7 @@ namespace balloon_planner
     switch (state)
     {
       /* case state_t::lost_glancing: return "lost_glancing"; */
+      case state_t::going_to_nextpos: return "going_to_nextpos";
       case state_t::waiting_for_detection: return "waiting_for_detection";
       case state_t::observing: return "observing";
       /* case state_t::yawing_detection: return "yawing_detection"; */
@@ -101,6 +103,32 @@ namespace balloon_planner
       case state_t::going_to_lurk: return "going_to_lurk";
       case state_t::lurking: return "lurking";
       default: return "unknown_state";
+    }
+  }
+  
+  //}
+
+  namespace strat_enum
+  {
+    enum strat_t
+    {
+      lurk_arc_endpose,
+      lurk_most_probable,
+      lurk_lowest,
+      unknown
+    };
+  }
+  using strat_t = strat_enum::strat_t;
+  /* to_string //{ */
+  
+  std::string to_string(const strat_t strat)
+  {
+    switch (strat)
+    {
+      case strat_t::lurk_arc_endpose: return "lurk_arc_endpose";
+      case strat_t::lurk_most_probable: return "lurk_most_probable";
+      case strat_t::lurk_lowest: return "lurk_lowes";
+      default: return "unknown strategy";
     }
   }
   
@@ -123,7 +151,7 @@ namespace balloon_planner
   class BalloonPlanner : public nodelet::Nodelet
   {
     public:
-      BalloonPlanner() : m_node_name("BalloonPlanner"), m_activated(false) {};
+      BalloonPlanner() : m_node_name("BalloonPlanner"), m_initialized(false), m_activated(false) {};
       virtual void onInit();
 
       bool m_is_initialized;
@@ -131,6 +159,7 @@ namespace balloon_planner
     private:
       const std::string m_node_name;
       void main_loop([[maybe_unused]] const ros::TimerEvent& evt);
+      void delayed_init([[maybe_unused]] const ros::TimerEvent& evt);
 
     private:
       std::unique_ptr<mrs_lib::Profiler> m_profiler_ptr;
@@ -143,24 +172,31 @@ namespace balloon_planner
 
       /* Parameters, loaded from ROS //{ */
       std::string m_world_frame_id;
+      std::string m_arena_frame_id;
 
-      double m_approach_speed;
-      double m_chase_speed;
+      bool m_land_at_end;
+      vec2_t m_land_zone;
+      double m_landing_height;
+
+      double m_pogo_min_height;
+      double m_pogo_max_height;
+      double m_pogo_speed;
+
       ros::Duration m_max_unseen_dur;
 
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
+      double m_trajectory_tgt_reached_dist;
 
       vec4_t m_start_pose;
-      double m_target_offset;
 
       double m_yawing_max_ball_dist;
 
       ros::Duration m_lurking_min_observing_dur;
-      double m_lurking_z_offset;
       double m_lurking_reaction_dist;
       double m_lurking_max_reposition;
       int m_lurking_min_last_pts;
+      double m_lurking_z_offset;
       ros::Duration m_lurking_min_last_dur;
       double m_lurking_passthrough_dist;
 
@@ -200,14 +236,25 @@ namespace balloon_planner
       ros::ServiceClient m_srv_land_there;
 
       ros::Timer m_main_loop_timer;
+      ros::Timer m_delayed_init_timer;
       //}
 
       size_t m_max_pts;
 
     private:
+      bool m_initialized;
       bool m_activated;
+
       state_t m_state;
-      double m_path_offset;
+      strat_t m_strat;
+
+      // | -------------------------- pogo -------------------------- |
+      double m_pogo_prev_height;
+      double m_pogo_height_range;
+      double m_pogo_direction;
+      ros::Time m_pogo_prev_time;
+
+      // | ----------------------- other shit ----------------------- |
       ros::Time m_observing_start;
       std::vector<pose_stamped_t> m_ball_positions;
       vec4_t m_orig_lurk_pose;       // the original lurking pose

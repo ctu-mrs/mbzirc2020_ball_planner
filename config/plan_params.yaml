@@ -1,3 +1,4 @@
+land_at_end: true
 
 planning_period: 0.1 # seconds
 
@@ -18,11 +19,12 @@ lurking:
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_offset: 5.0 # metres
+  target_reached_distance: 1.0 # metre - at this distance from the target point it is considered to be reached
 
-z_bounds:
-  min: 6.0
-  max: 20.0
+pogo:
+  min_height: 5.5 # metres
+  max_height: 15.0 # metres
+  speed: 1.0 # metres per second
 
 constraint_states:
   {
@@ -44,10 +46,12 @@ start_position:
     -0.1    # yaw (radians)
   ]
 
-landing_position:
-  [
-    -30.0,   # x coordinate (metres)
-    0.0,  # y coordinate (metres)
-    5.0,   # z coordinate (metres)
-    0.0    # yaw (radians)
-  ]
+landing_height: 6.0 # metres
+## ############### NOW SPECIFIED IN THE WORLD FILE ###############
+# landing_position:
+#   [
+#     -30.0,   # x coordinate (metres)
+#     0.0,  # y coordinate (metres)
+#     5.0,   # z coordinate (metres)
+#     0.0    # yaw (radians)
+#   ]
