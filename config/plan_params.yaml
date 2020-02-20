@@ -7,9 +7,9 @@ max_unseen_duration: 10.0 # seconds
 approach_speed: 6.0 # metres per second
 
 lurking:
-  z_offset: -0.5 # metres
-  reaction_dist: 10.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
-  max_reposition: 1.5 # metres
+  z_offset: -1.0 # metres
+  reaction_dist: 15.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
+  max_reposition: 15.0 # metres
   min_observing_duration: 30.0 # the target must be observed at least this amount of seconds to start lurking
   min_last_points: 10 # how many last points at minimum to use when RANSACing the lurking position
   min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position
@@ -33,7 +33,7 @@ constraint_states:
     "following_detection": "ballcatch_slow",
     "following_prediction": "ballcatch_slow",
     "going_to_lurk": "ballcatch_slow",
-    "lurking": "ballcatch_slow",
+    "lurking": "ballcatch_fast",
   }
 
 start_position:

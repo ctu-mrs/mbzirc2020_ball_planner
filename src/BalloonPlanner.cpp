@@ -287,7 +287,7 @@ namespace balloon_planner
           }
           //}
           if (!intercept_pos_opt.has_value() && ball_pose_stamped_opt.has_value())
-          /* otherwise use the detection (if available) to orient the lurker //{ */
+          /* otherwise use the detection (if available) to orient the lurker and set its height //{ */
           {
             const auto ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
             const double ball_dist = (ball_pos - cur_cmd_pos).norm();
@@ -313,9 +313,38 @@ namespace balloon_planner
           }
           //}
 
+          bool is_behind_yzplane = false;
+          /* check for passthrough and transition to the next state if detected //{ */
+
+          if (ball_pos_opt.has_value())
+          {
+            const auto ball_pos = ball_pos_opt.value();
+            const double ball_dist = (ball_pos - cur_cmd_pos).norm();
+            const double signed_ball_dist = signed_point_plane_distance(ball_pos, intersect_plane);
+            ROS_WARN("[LURKING]: Signed ball distance from YZ plane: %.2fm!!", signed_ball_dist);
+            if (signed_ball_dist < 0.0)
+              is_behind_yzplane = true;
+            if (ball_dist < m_lurking_passthrough_dist)
+            {
+              if (m_prev_signed_ball_dist_set && mrs_lib::sign(signed_ball_dist) != mrs_lib::sign(m_prev_signed_ball_dist))
+              {
+                ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
+                // TODO: check if the ball is in the net and if so, go land
+                /* land_there(m_landing_pose); */
+              }
+              m_prev_signed_ball_dist = signed_ball_dist;
+              m_prev_signed_ball_dist_set = true;
+            }
+          }
+
+          //}
+
+          // ignore the new setpoint if the ball is behind the YX plane
           /* publish the new command trajectory //{ */
 
-          if (intercept_pos_opt.has_value())
+          if (is_behind_yzplane)
+            ROS_WARN("[LURKING]: The ball is behind the YZ plane - ignoring.");
+          if (intercept_pos_opt.has_value() && !is_behind_yzplane)
           {
             auto lurking_pose = intercept_pos_opt.value();
             const auto lurking_point = lurking_pose.block<3, 1>(0, 0);
@@ -342,29 +371,6 @@ namespace balloon_planner
 
             ROS_INFO_THROTTLE(1.0, "[LURKING]: Lurking at position [%.2f, %.2f, %.2f] (yaw: %.2f) - %.2fm from orig. lurk point", lurking_pose.x(),
                               lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), repos_dist);
-          }
-
-          //}
-
-          /* check for passthrough and transition to the next state if detected //{ */
-
-          if (ball_pos_opt.has_value())
-          {
-            const auto ball_pos = ball_pos_opt.value();
-            const double ball_dist = (ball_pos - cur_cmd_pos).norm();
-            if (ball_dist < m_lurking_passthrough_dist)
-            {
-              const double signed_ball_dist = signed_point_plane_distance(ball_pos, intersect_plane);
-              ROS_WARN("[LURKING]: Signed ball distance from YZ plane: %.2fm!!", signed_ball_dist);
-              if (m_prev_signed_ball_dist_set && mrs_lib::sign(signed_ball_dist) != mrs_lib::sign(m_prev_signed_ball_dist))
-              {
-                ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
-                // TODO: check if the ball is in the net and if so, go land
-                /* land_there(m_landing_pose); */
-              }
-              m_prev_signed_ball_dist = signed_ball_dist;
-              m_prev_signed_ball_dist_set = true;
-            }
           }
 
           //}
