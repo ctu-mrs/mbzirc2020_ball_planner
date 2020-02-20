@@ -75,14 +75,12 @@ namespace balloon_planner
   {
     enum state_t
     {
-      /* lost_glancing, */
       going_to_nextpos,
       waiting_for_detection,
       observing,
-      /* yawing_detection, */
-      /* following_detection, */
-      /* following_prediction, */
-      going_to_lurk,
+      going_to_lurk_down,
+      going_to_lurk_horizontal,
+      going_to_lurk_up,
       lurking,
     };
   }
@@ -93,14 +91,12 @@ namespace balloon_planner
   {
     switch (state)
     {
-      /* case state_t::lost_glancing: return "lost_glancing"; */
       case state_t::going_to_nextpos: return "going_to_nextpos";
       case state_t::waiting_for_detection: return "waiting_for_detection";
       case state_t::observing: return "observing";
-      /* case state_t::yawing_detection: return "yawing_detection"; */
-      /* case state_t::following_detection: return "following_detection"; */
-      /* case state_t::following_prediction: return "following_prediction"; */
-      case state_t::going_to_lurk: return "going_to_lurk";
+      case state_t::going_to_lurk_down: return "going_to_lurk_down";
+      case state_t::going_to_lurk_horizontal: return "going_to_lurk_horizontal";
+      case state_t::going_to_lurk_up: return "going_to_lurk_up";
       case state_t::lurking: return "lurking";
       default: return "unknown_state";
     }
@@ -187,6 +183,7 @@ namespace balloon_planner
       double m_trajectory_sampling_dt;
       double m_trajectory_horizon;
       double m_trajectory_tgt_reached_dist;
+      double m_trajectory_default_speed;
 
       vec4_t m_start_pose;
 
@@ -257,12 +254,13 @@ namespace balloon_planner
       // | ----------------------- other shit ----------------------- |
       ros::Time m_observing_start;
       std::vector<pose_stamped_t> m_ball_positions;
+
+      vec4_t m_cur_goto_pose; // where we're currently trying to get (used for checking whether we got there)
+
       vec4_t m_orig_lurk_pose;       // the original lurking pose
       vec4_t m_cur_lurk_pose;        // where the drone currently wans to lurk (without the z offset)
       vec4_t m_cur_lurk_pose_offset; // offset in the z - direction by m_lurking_z_offset
       double m_last_seen_relative_yaw;
-      bool m_sent_lurk_pos;
-      ros::Time m_sent_lurk_pos_stamp;
       double m_prev_signed_ball_dist_set;
       double m_prev_signed_ball_dist;
 

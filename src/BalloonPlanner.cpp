@@ -70,21 +70,9 @@ namespace balloon_planner
     const auto ball_pred_opt = get_ball_prediction();
     /* set constraints, set last seen yaw etc. according to ball position if available //{ */
 
-    if (ball_pose_stamped_opt.has_value() && cur_pos_yaw_opt.has_value())
     {
-      const vec3_t ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
-      const vec4_t& cur_pos_yaw = cur_pos_yaw_opt.value();
-      const vec3_t& cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
-      const double& cur_yaw = cur_pos_yaw.w();
-      const vec3_t ball_dir = cur_pos - ball_pos;
-
-      const double ball_relative_yaw = mrs_lib::normalize_angle(std::atan2(ball_dir.y(), ball_dir.x()) - cur_yaw);
-      m_last_seen_relative_yaw = ball_relative_yaw;
-
-      const double ball_dist = ball_dir.norm();
       const auto desired_constraints = pick_constraints(m_state);
-      ROS_INFO_STREAM_THROTTLE(0.5, "[BallPlanner]: Distance from latest ball detection is "
-                                        << ball_dist << "m at " << ball_relative_yaw << " relative yaw. setting '" << desired_constraints << "' constraints.");
+      ROS_INFO_STREAM_THROTTLE(1.0, "[BallPlanner]: Setting '" << desired_constraints << "' constraints.");
       set_constraints(desired_constraints);
     }
 
@@ -95,29 +83,39 @@ namespace balloon_planner
       case state_enum::going_to_nextpos:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOINT_TO_NEXTPOS'");
+        /*  //{ */
+        
+        m_cur_goto_pose = m_start_pose;
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time(0);  // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_pose, result_traj);
+        add_point_to_trajectory(m_cur_goto_pose, result_traj);
         m_pub_cmd_traj.publish(result_traj);
-
-        ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS]: Going to start point [" << m_start_pose.transpose() << "]");
+        if (m_pub_dbg_traj.getNumSubscribers() > 0)
+          m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+        
+        ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS]: Going to start point [" << m_cur_goto_pose.transpose() << "]");
         if (cur_pos_yaw_opt.has_value())
         {
           const auto cur_pos_yaw = cur_pos_yaw_opt.value();
           const auto cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
-          const auto start_pos = m_start_pose.block<3, 1>(0, 0);
-          const double des_pos_dist = (start_pos - cur_pos).norm();
-
+          const auto goto_pos = m_cur_goto_pose.block<3, 1>(0, 0);
+          const double des_pos_dist = (goto_pos - cur_pos).norm();
+        
           ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS]: Distance from start point: " << des_pos_dist << "m/" << m_trajectory_tgt_reached_dist << "m.");
           if (des_pos_dist < m_trajectory_tgt_reached_dist)
           {
             ROS_WARN_STREAM("[GOINT_TO_NEXTPOS]: Reached target position, continuing!");
+            m_pogo_prev_time = ros::Time::now();
+            m_pogo_prev_height = m_pogo_min_height;
+            m_pogo_direction = 1.0;
             m_state = state_enum::waiting_for_detection;
           }
         }
+        
+        //}
       }
       break;
       case state_enum::waiting_for_detection:
@@ -146,6 +144,8 @@ namespace balloon_planner
         result_traj.fly_now = true;
         add_point_to_trajectory(new_pose, result_traj);
         m_pub_cmd_traj.publish(result_traj);
+        if (m_pub_dbg_traj.getNumSubscribers() > 0)
+          m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
 
         const auto time_since_last_det_msg = ros::Time::now() - m_sh_ball_detection->last_message_time();
         const bool det_valid = m_sh_ball_detection->has_data() && time_since_last_det_msg < m_max_unseen_dur;
@@ -170,47 +170,224 @@ namespace balloon_planner
         const auto now = ros::Time::now();
         const auto observing_dur = now - m_observing_start;
         const auto time_since_last_det_msg = now - m_sh_ball_detection->last_message_time();
-        ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
-                          time_since_last_det_msg.toSec());
 
         vec4_t observe_pose = m_start_pose;
         // adjust the height according to the detection, if available
         if (ball_pose_stamped_opt.has_value())
-          observe_pose.z() = ball_pose_stamped_opt.value().pose.z();
-        // otherwise fly to the last passthrough height
+        {
+          const vec4_t ball_pose = ball_pose_stamped_opt.value().pose;
+          observe_pose.z() = ball_pose.z();
+          if (cur_pos_yaw_opt.has_value())
+          {
+            const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
+            const vec3_t diff_vec = ball_pose.block<3, 1>(0, 0) - cur_pos;
+            const double yaw = std::atan2(diff_vec.y(), diff_vec.x());
+            observe_pose.w() = yaw;
+          }
+          ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using detetion height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
+                            time_since_last_det_msg.toSec(), observe_pose.z());
+        }
+        // otherwise use the last passthrough height
         else if (ball_passthrough_stamped_opt.has_value())
+        {
           observe_pose.z() = ball_passthrough_stamped_opt.value().pose.z();
+          ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using passthrough height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
+                            time_since_last_det_msg.toSec(), observe_pose.z());
+        }
+        else
+        {
+          ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using default height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
+                            time_since_last_det_msg.toSec(), observe_pose.z());
+        }
 
         traj_t result_traj;
         result_traj.header.frame_id = m_world_frame_id;
         result_traj.header.stamp = ros::Time(0);  // just fly now
         result_traj.use_yaw = true;
         result_traj.fly_now = true;
-        add_point_to_trajectory(m_start_pose, result_traj);
+        add_point_to_trajectory(observe_pose, result_traj);
         m_pub_cmd_traj.publish(result_traj);
+        if (m_pub_dbg_traj.getNumSubscribers() > 0)
+          m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
 
-        if (m_sh_ball_passthrough->has_data() && observing_dur >= m_lurking_min_observing_dur)
+        if (observing_dur >= m_lurking_min_observing_dur)
         {
-          ROS_WARN_STREAM("[OBSERVING]: Observing duration fulfilled, going to lurk!");
-          m_sent_lurk_pos = false;
-          m_state = state_enum::going_to_lurk;
+          if (ball_passthrough_stamped_opt.has_value())
+          {
+            // calculate the luring pose where we want to be
+            vec4_t lurking_pose = ball_passthrough_stamped_opt.value().pose;
+            lurking_pose.w() += M_PI;                // rotate the yaw to face the incoming ball
+            m_orig_lurk_pose = lurking_pose;         // this member variable should not change throughout the lurking
+            m_cur_lurk_pose = lurking_pose;          // this will change in adaptation to the predicted ball trajectory
+            lurking_pose.z() += m_lurking_z_offset;  // apply the desired offset to the z coordinate
+            m_cur_lurk_pose_offset = lurking_pose;   // this is the current lurk pose, properly offset in the z coordinate
+
+            ROS_WARN_STREAM("[OBSERVING]: Observing duration fulfilled, passthrough pose available, going to lurk!");
+            m_state = state_enum::going_to_lurk_down;
+          }
+          else
+          {
+            ROS_WARN_STREAM("[OBSERVING]: Observing duration fulfilled, passthrough pose NOT available, cannot go lurking!");
+          }
         }
 
         //}
       }
       break;
-      case state_enum::going_to_lurk:
+      case state_enum::going_to_lurk_down:
       {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK'");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK_DOWN'");
         /*  //{ */
 
-        if (m_sent_lurk_pos)
+        if (cur_pos_yaw_opt.has_value())
+        {
+          const auto cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
+          const auto cur_yaw = cur_pos_yaw_opt.value().w();
+
+          // calculate the pose where we want to be
+          std_msgs::Header header;
+          header.frame_id = m_world_frame_id;
+          header.stamp = ros::Time::now();
+          m_cur_goto_pose = {cur_pos.x(), cur_pos.y(), m_pogo_min_height, cur_yaw};
+
+          // go to minimal flight height
+          traj_t result_traj;
+          result_traj.header = header;
+          result_traj.header.stamp = ros::Time(0);  // just fly now
+          result_traj.use_yaw = true;
+          result_traj.fly_now = true;
+          add_point_to_trajectory(m_cur_goto_pose, result_traj);
+
+          m_pub_cmd_traj.publish(result_traj);
+          if (m_pub_dbg_traj.getNumSubscribers() > 0)
+            m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+
+          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK_DOWN]: Going to min-height position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]",
+                            m_cur_goto_pose.x(), m_cur_goto_pose.y(), m_cur_goto_pose.z(), m_cur_goto_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(),
+                            m_orig_lurk_pose.z());
+        }
+
+        /* check if we got to the desired position yet //{ */
+        
+        if (cur_pos_yaw_opt.has_value())
         {
           // wait for the lurker to get into the lurking position
-          const auto diags_delay = ros::Time::now() - m_sent_lurk_pos_stamp;
-          if (diags_delay > ros::Duration(0.1) && m_sh_tracker_diags->has_data() && !m_sh_tracker_diags->get_data()->tracking_trajectory)
+          const auto cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
+          const double cur_dist = (m_cur_goto_pose.block<3, 1>(0, 0) - cur_pos).norm();
+          if (cur_dist < m_trajectory_tgt_reached_dist)
           {
-            ROS_INFO("[GOING_TO_LURK]: At lurking spot, switching state to 'LURKING'.");
+            ROS_INFO("[GOING_TO_LURK_DOWN]: At lowest-z height, switching state to 'GOING_TO_LURK_HORIZONTAL'.");
+            reset_filter();
+            // move to the next state
+            m_state = state_enum::going_to_lurk_horizontal;
+          } else
+          {
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK_DOWN]: Waiting to reach lowest-z height position [%.2f, %.2f, %.2f] (yaw: %.2f). Cur. dist.: %.2f.", m_cur_goto_pose.x(),
+                              m_cur_goto_pose.y(), m_cur_goto_pose.z(), m_cur_goto_pose.w(), cur_dist);
+          }
+        }
+        
+        //}
+
+        //}
+      }
+      break;
+      case state_enum::going_to_lurk_horizontal:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK_HORIZONTAL'");
+        /*  //{ */
+
+        if (cur_pos_yaw_opt.has_value())
+        {
+          const auto cur_yaw = cur_pos_yaw_opt.value().w();
+
+          // calculate the pose where we want to be
+          std_msgs::Header header;
+          header.frame_id = m_world_frame_id;
+          header.stamp = ros::Time::now();
+          m_cur_goto_pose = {m_cur_lurk_pose_offset.x(), m_cur_lurk_pose_offset.y(), m_pogo_min_height, cur_yaw};
+
+          // go to minimal flight height
+          traj_t result_traj;
+          result_traj.header = header;
+          result_traj.header.stamp = ros::Time(0);  // just fly now
+          result_traj.use_yaw = true;
+          result_traj.fly_now = true;
+          add_point_to_trajectory(m_cur_goto_pose, result_traj);
+
+          m_pub_cmd_traj.publish(result_traj);
+          if (m_pub_dbg_traj.getNumSubscribers() > 0)
+            m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+
+          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK_HORIZONTAL]: Going to min-height lurk position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]",
+                            m_cur_goto_pose.x(), m_cur_goto_pose.y(), m_cur_goto_pose.z(), m_cur_goto_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(),
+                            m_orig_lurk_pose.z());
+        }
+
+        /* check if we got to the desired position yet //{ */
+        
+        if (cur_pos_yaw_opt.has_value())
+        {
+          // wait for the lurker to get into the lurking position
+          const auto cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
+          const double cur_dist = (m_cur_goto_pose.block<3, 1>(0, 0) - cur_pos).norm();
+          if (cur_dist < m_trajectory_tgt_reached_dist)
+          {
+            ROS_INFO("[GOING_TO_LURK_HORIZONTAL]: At correct position, switching state to 'GOING_TO_LURK_UP'.");
+            reset_filter();
+            // move to the next state
+            m_state = state_enum::going_to_lurk_up;
+          } else
+          {
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK_HORIZONTAL]: Waiting to reach correct position [%.2f, %.2f, %.2f] (yaw: %.2f). Cur. dist.: %.2f.", m_cur_goto_pose.x(),
+                              m_cur_goto_pose.y(), m_cur_goto_pose.z(), m_cur_goto_pose.w(), cur_dist);
+          }
+        }
+        
+        //}
+
+        //}
+      }
+      break;
+      case state_enum::going_to_lurk_up:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOING_TO_LURK_UP'");
+        /*  //{ */
+
+        {
+          // calculate the pose where we want to be
+          std_msgs::Header header;
+          header.frame_id = m_world_frame_id;
+          header.stamp = ros::Time::now();
+          m_cur_goto_pose = m_cur_lurk_pose_offset;
+
+          // go to minimal flight height
+          traj_t result_traj;
+          result_traj.header = header;
+          result_traj.header.stamp = ros::Time(0);  // just fly now
+          result_traj.use_yaw = true;
+          result_traj.fly_now = true;
+          add_point_to_trajectory(m_cur_goto_pose, result_traj);
+
+          m_pub_cmd_traj.publish(result_traj);
+          if (m_pub_dbg_traj.getNumSubscribers() > 0)
+            m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+
+          ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK_UP]: Going to the lurk position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]",
+                            m_cur_goto_pose.x(), m_cur_goto_pose.y(), m_cur_goto_pose.z(), m_cur_goto_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(),
+                            m_orig_lurk_pose.z());
+        }
+
+        /* check if we got to the desired position yet //{ */
+        
+        if (cur_pos_yaw_opt.has_value())
+        {
+          // wait for the lurker to get into the lurking position
+          const auto cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
+          const double cur_dist = (m_cur_goto_pose.block<3, 1>(0, 0) - cur_pos).norm();
+          if (cur_dist < m_trajectory_tgt_reached_dist)
+          {
+            ROS_INFO("[GOING_TO_LURK_UP]: At lurking position, switching state to 'LURKING'.");
             reset_filter();
             // reset detections and predictions
             if (m_sh_ball_detection->new_data())
@@ -222,45 +399,12 @@ namespace balloon_planner
             m_state = state_enum::lurking;
           } else
           {
-            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Waiting to reach lurk position [%.2f, %.2f, %.2f] (yaw: %.2f).", m_cur_lurk_pose_offset.x(),
-                              m_cur_lurk_pose_offset.y(), m_cur_lurk_pose_offset.z(), m_cur_lurk_pose_offset.w());
-          }
-        } else
-        {
-          if (ball_passthrough_stamped_opt.has_value())
-          {
-            vec4_t lurking_pose = ball_passthrough_stamped_opt.value().pose;
-            lurking_pose.w() += M_PI;                // rotate the yaw to face the incoming ball
-            m_orig_lurk_pose = lurking_pose;         // this member variable should not change throughout the lurking
-            m_cur_lurk_pose = lurking_pose;          // this will change in adaptation to the predicted ball trajectory
-            lurking_pose.z() += m_lurking_z_offset;  // apply the desired offset to the z coordinate
-            m_cur_lurk_pose_offset = lurking_pose;   // this is the current lurk pose, properly offset in the z coordinate
-
-            std_msgs::Header header;
-            header.frame_id = m_world_frame_id;
-            header.stamp = ros::Time::now();
-            m_pub_dbg_lurking_position.publish(to_output_message(lurking_pose, header));
-
-            traj_t result_traj;
-            add_point_to_trajectory(lurking_pose, result_traj);
-            result_traj.header = header;
-            result_traj.header.stamp = ros::Time(0);  // just fly now
-            result_traj.use_yaw = true;
-            result_traj.fly_now = true;
-            m_pub_cmd_traj.publish(result_traj);
-            if (m_pub_dbg_traj.getNumSubscribers() > 0)
-              m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
-
-            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK]: Going to lurk at position [%.2f, %.2f, %.2f] (yaw: %.2f). Detection position: [%.2f, %.2f, %.2f]",
-                              lurking_pose.x(), lurking_pose.y(), lurking_pose.z(), lurking_pose.w(), m_orig_lurk_pose.x(), m_orig_lurk_pose.y(),
-                              m_orig_lurk_pose.z());
-            m_sent_lurk_pos = true;
-            m_sent_lurk_pos_stamp = ros::Time::now();
-          } else
-          {
-            ROS_ERROR_THROTTLE(1.0, "[GOING_TO_LURK]: Didn't get ball passthrough position! Cannot continue.");
+            ROS_INFO_THROTTLE(1.0, "[GOING_TO_LURK_UP]: Waiting to reach lurking position [%.2f, %.2f, %.2f] (yaw: %.2f). Cur. dist.: %.2f.", m_cur_goto_pose.x(),
+                              m_cur_goto_pose.y(), m_cur_goto_pose.z(), m_cur_goto_pose.w(), cur_dist);
           }
         }
+        
+        //}
 
         //}
       }
@@ -279,7 +423,6 @@ namespace balloon_planner
         {
           const auto cur_cmd_pos_yaw = cur_cmd_pos_yaw_opt.value();
           const auto cur_cmd_pos = cur_cmd_pos_yaw.block<3, 1>(0, 0);
-          /* const auto cur_cmd_pos = m_cur_lurk_pose_offset.block<3, 1>(0, 0); */
           const auto cur_time = ros::Time::now();
 
           const auto intersect_plane = get_yz_plane(m_orig_lurk_pose);
@@ -366,7 +509,7 @@ namespace balloon_planner
             const auto ball_pos = ball_pos_opt.value();
             const double ball_dist = (ball_pos - cur_cmd_pos).norm();
             const double signed_ball_dist = signed_point_plane_distance(ball_pos, intersect_plane);
-            ROS_WARN("[LURKING]: Signed ball distance from YZ plane: %.2fm!!", signed_ball_dist);
+            ROS_WARN_THROTTLE(1.0, "[LURKING]: Signed ball distance from YZ plane: %.2fm!!", signed_ball_dist);
             if (signed_ball_dist < 0.0)
               is_behind_yzplane = true;
             if (ball_dist < m_lurking_passthrough_dist)
@@ -1459,6 +1602,7 @@ namespace balloon_planner
 
     pl.load_param("trajectory/sampling_dt", m_trajectory_sampling_dt);
     pl.load_param("trajectory/target_reached_distance", m_trajectory_tgt_reached_dist);
+    pl.load_param("trajectory/default_speed", m_trajectory_default_speed);
 
     pl.load_param("pogo/min_height", m_pogo_min_height);
     pl.load_param("pogo/max_height", m_pogo_max_height);
@@ -1561,9 +1705,6 @@ namespace balloon_planner
     m_ball_positions.reserve(200);
     m_state = state_enum::going_to_nextpos;
 
-    m_pogo_direction = 1.0;
-    m_pogo_prev_height = m_pogo_min_height;
-    m_pogo_prev_time = ros::Time::now();
     m_pogo_height_range = m_pogo_max_height - m_pogo_min_height;
 
     ROS_INFO("[%s]: initialized", m_node_name.c_str());
