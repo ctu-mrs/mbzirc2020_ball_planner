@@ -184,7 +184,7 @@ namespace balloon_planner
             const double yaw = std::atan2(diff_vec.y(), diff_vec.x());
             observe_pose.w() = yaw;
           }
-          ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using detetion height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
+          ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using detection height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
                             time_since_last_det_msg.toSec(), observe_pose.z());
         }
         // otherwise use the last passthrough height
@@ -898,7 +898,7 @@ namespace balloon_planner
   /* get_ball_position() method //{ */
   std::optional<pose_stamped_t> BalloonPlanner::get_ball_position()
   {
-    if (!m_sh_ball_detection->new_data())
+    if (!m_sh_ball_detection->has_data())
       return std::nullopt;
     const auto det = *(m_sh_ball_detection->get_data());
 
@@ -916,7 +916,7 @@ namespace balloon_planner
   /* get_ball_passthrough() method //{ */
   std::optional<pose_stamped_t> BalloonPlanner::get_ball_passthrough()
   {
-    if (!m_sh_ball_passthrough->new_data())
+    if (!m_sh_ball_passthrough->has_data())
       return std::nullopt;
     const auto det = *(m_sh_ball_passthrough->get_data());
     return process_detection(det);

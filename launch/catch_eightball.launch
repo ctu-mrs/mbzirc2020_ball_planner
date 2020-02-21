@@ -31,7 +31,7 @@
       <!-- Subscribers -->
       <remap from="~ball_detection" to="uav_detection/detection" />
       <remap from="~ball_prediction" to="balloon_filter/prediction" />
-      <remap from="~ball_passthrough" to="uav_detection/passthrough_position" />
+      <remap from="~ball_passthrough" to="balloon_filter/line_endpose" />
       <remap from="~cmd_odom" to="control_manager/cmd_odom" />
       <remap from="~main_odom" to="odometry/odom_main" />
       <remap from="~tracker_diagnostics" to="control_manager/mpc_tracker/diagnostics" />
