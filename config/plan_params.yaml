@@ -10,8 +10,8 @@ approach_speed: 6.0 # metres per second
 lurking:
   z_offset: -1.5 # metres
   reaction_dist: 15.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
-  max_reposition: 15.0 # metres
-  min_observing_duration: 60.0 # the target must be observed at least this amount of seconds to start lurking
+  max_reposition: 5.0 # metres
+  min_observing_duration: 999.0 # the target must be observed at least this amount of seconds to start lurking
   min_last_points: 10 # how many last points at minimum to use when RANSACing the lurking position
   min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position
   passthrough_detection_distance: 4.0 # metres - when distance of the ball is smaller, the signed distnace from YZ lurk plane will be used for detecting passthrough
@@ -43,8 +43,8 @@ constraint_states:
 
 start_position:
   [
-    10.0,   # x coordinate (metres)
-    0.0,  # y coordinate (metres)
+    6.0,   # x coordinate (metres)
+    -8.0,  # y coordinate (metres)
     5.5,   # z coordinate (metres)
     -0.1    # yaw (radians)
   ]
