@@ -44,9 +44,9 @@ constraint_states:
 start_position:
   [
     10.0,   # x coordinate (metres)
-    0.0,  # y coordinate (metres)
+    10.0,  # y coordinate (metres)
     5.5,   # z coordinate (metres)
-    -0.1    # yaw (radians)
+    0.0    # yaw (radians)
   ]
 
 landing_height: 5.5 # metres
