@@ -198,6 +198,8 @@ namespace balloon_planner
       double m_lurking_z_offset;
       ros::Duration m_lurking_min_last_dur;
       double m_lurking_passthrough_dist;
+      bool m_lurking_land_check;
+      bool m_lurking_land_after_first_passthrough;
 
       /* std::map<double, std::string> m_constraint_ranges; */
       std::map<std::string, std::string> m_constraint_states;
@@ -235,6 +237,7 @@ namespace balloon_planner
       ros::ServiceClient m_srv_reset_filter;
       ros::ServiceClient m_srv_set_constraints;
       ros::ServiceClient m_srv_land_there;
+      ros::ServiceClient m_srv_ball_check;
 
       ros::Timer m_main_loop_timer;
       ros::Timer m_delayed_init_timer;
@@ -281,6 +284,7 @@ namespace balloon_planner
       void reset_detector();
       void reset_filter();
       bool land_there(const vec4_t& landing_pose);
+      void call_check_ball();
 
       vec3_t calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance = 1e-9);
 

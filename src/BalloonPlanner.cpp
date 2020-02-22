@@ -562,8 +562,10 @@ namespace balloon_planner
               if (m_prev_signed_ball_dist_set && mrs_lib::sign(signed_ball_dist) != mrs_lib::sign(m_prev_signed_ball_dist))
               {
                 ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
-                // TODO: check if the ball is in the net and if so, go land
-                /* land_there(m_landing_pose); */
+                if (m_lurking_land_check)
+                  call_check_ball();
+                if (m_lurking_land_after_first_passthrough)
+                  land_there(m_landing_pose);
               }
               m_prev_signed_ball_dist = signed_ball_dist;
               m_prev_signed_ball_dist_set = true;
@@ -738,6 +740,18 @@ namespace balloon_planner
     else
       ROS_ERROR("Failed to call service to land there!");
     return res.success;
+  }
+  //}
+
+  /* call_check_ball() method //{ */
+  void BalloonPlanner::call_check_ball()
+  {
+    std_srvs::Trigger::Request req;
+    std_srvs::Trigger::Response res;
+    if (m_srv_ball_check.call(req, res))
+      ROS_INFO("Ball fondler response: %s", res.message.c_str());
+    else
+      ROS_ERROR("Failed to call service to fondle the balls!");
   }
   //}
 
@@ -1670,6 +1684,8 @@ namespace balloon_planner
     pl.load_param("lurking/min_last_points", m_lurking_min_last_pts);
     pl.load_param("lurking/min_last_duration", m_lurking_min_last_dur);
     pl.load_param("lurking/passthrough_detection_distance", m_lurking_passthrough_dist);
+    pl.load_param("lurking/land_check", m_lurking_land_check);
+    pl.load_param("lurking/land_after_first_passthrough", m_lurking_land_after_first_passthrough);
 
     pl.load_param("constraint_states", m_constraint_states);
 
@@ -1745,6 +1761,7 @@ namespace balloon_planner
     m_srv_reset_filter = nh.serviceClient<std_srvs::Trigger>("reset_balloon_filter");
     m_srv_set_constraints = nh.serviceClient<mrs_msgs::String>("set_constraints");
     m_srv_land_there = nh.serviceClient<mrs_msgs::ReferenceStampedSrv>("land_there");
+    m_srv_ball_check = nh.serviceClient<std_srvs::Trigger>("ball_check");
 
     //}
 

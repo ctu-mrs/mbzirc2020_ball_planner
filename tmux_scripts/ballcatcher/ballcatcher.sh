@@ -39,6 +39,7 @@ input=(
 '
   'Planning' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
 '
+  'Service' 'rosservice call /'"$UAV_NAME"'/balloon_planner/land'
   'AutoStart' 'waitForRos; roslaunch mrs_general automatic_start_mbzirc.launch challenge:=ball
 '
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'
