@@ -75,6 +75,7 @@ namespace balloon_planner
   {
     enum state_t
     {
+      going_to_nextpos_low,
       going_to_nextpos,
       waiting_for_detection,
       observing,
@@ -91,6 +92,7 @@ namespace balloon_planner
   {
     switch (state)
     {
+      case state_t::going_to_nextpos_low: return "going_to_nextpos_low";
       case state_t::going_to_nextpos: return "going_to_nextpos";
       case state_t::waiting_for_detection: return "waiting_for_detection";
       case state_t::observing: return "observing";
@@ -228,6 +230,7 @@ namespace balloon_planner
       ros::ServiceServer m_srv_start;
       ros::ServiceServer m_srv_stop;
 
+      ros::ServiceClient m_srv_reset_detector;
       ros::ServiceClient m_srv_reset_filter;
       ros::ServiceClient m_srv_set_constraints;
       ros::ServiceClient m_srv_land_there;
@@ -273,6 +276,7 @@ namespace balloon_planner
       /* std::string pick_constraints(const double ball_dist); */
       std::string pick_constraints(const state_t state);
       void set_constraints(const std::string& constraints_name);
+      void reset_detector();
       void reset_filter();
       bool land_there(const vec4_t& landing_pose);
 

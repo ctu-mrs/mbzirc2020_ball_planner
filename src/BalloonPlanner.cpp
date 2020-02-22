@@ -80,6 +80,47 @@ namespace balloon_planner
 
     switch (m_state)
     {
+      case state_enum::going_to_nextpos_low:
+      {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOINT_TO_NEXTPOS_LOW'");
+        /*  //{ */
+        
+        m_cur_goto_pose = m_start_pose;
+        m_cur_goto_pose.z() = m_pogo_min_height;
+        traj_t result_traj;
+        result_traj.header.frame_id = m_world_frame_id;
+        result_traj.header.stamp = ros::Time(0);  // just fly now
+        result_traj.use_yaw = true;
+        result_traj.fly_now = true;
+        add_point_to_trajectory(m_cur_goto_pose, result_traj);
+        m_pub_cmd_traj.publish(result_traj);
+        if (m_pub_dbg_traj.getNumSubscribers() > 0)
+          m_pub_dbg_traj.publish(traj_to_path(result_traj, m_trajectory_sampling_dt));
+        
+        ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS_LOW]: Going to start point (at low height) [" << m_cur_goto_pose.transpose() << "]");
+        if (cur_pos_yaw_opt.has_value())
+        {
+          const auto cur_pos_yaw = cur_pos_yaw_opt.value();
+          const auto cur_pos = cur_pos_yaw.block<3, 1>(0, 0);
+          const auto goto_pos = m_cur_goto_pose.block<3, 1>(0, 0);
+          const double des_pos_dist = (goto_pos - cur_pos).norm();
+        
+          ROS_INFO_STREAM_THROTTLE(1.0, "[GOINT_TO_NEXTPOS_LOW]: Distance from start point (at low height): " << des_pos_dist << "m/" << m_trajectory_tgt_reached_dist << "m.");
+          if (des_pos_dist < m_trajectory_tgt_reached_dist)
+          {
+            ROS_WARN_STREAM("[GOINT_TO_NEXTPOS_LOW]: Reached target position, continuing!");
+
+            // reset filter and detector
+            reset_detector();
+            reset_filter();
+
+            m_state = state_enum::going_to_nextpos;
+          }
+        }
+        
+        //}
+      }
+      break;
       case state_enum::going_to_nextpos:
       {
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'GOINT_TO_NEXTPOS'");
@@ -109,7 +150,7 @@ namespace balloon_planner
           {
             ROS_WARN_STREAM("[GOINT_TO_NEXTPOS]: Reached target position, continuing!");
             m_pogo_prev_time = ros::Time::now();
-            m_pogo_prev_height = m_pogo_min_height;
+            m_pogo_prev_height = m_cur_goto_pose.z();
             m_pogo_direction = 1.0;
             m_state = state_enum::waiting_for_detection;
           }
@@ -277,7 +318,6 @@ namespace balloon_planner
           if (cur_dist < m_trajectory_tgt_reached_dist)
           {
             ROS_INFO("[GOING_TO_LURK_DOWN]: At lowest-z height, switching state to 'GOING_TO_LURK_HORIZONTAL'.");
-            reset_filter();
             // move to the next state
             m_state = state_enum::going_to_lurk_horizontal;
           } else
@@ -334,7 +374,6 @@ namespace balloon_planner
           if (cur_dist < m_trajectory_tgt_reached_dist)
           {
             ROS_INFO("[GOING_TO_LURK_HORIZONTAL]: At correct position, switching state to 'GOING_TO_LURK_UP'.");
-            reset_filter();
             // move to the next state
             m_state = state_enum::going_to_lurk_up;
           } else
@@ -388,7 +427,6 @@ namespace balloon_planner
           if (cur_dist < m_trajectory_tgt_reached_dist)
           {
             ROS_INFO("[GOING_TO_LURK_UP]: At lurking position, switching state to 'LURKING'.");
-            reset_filter();
             // reset detections and predictions
             if (m_sh_ball_detection->new_data())
               m_sh_ball_detection->get_data();
@@ -632,7 +670,7 @@ namespace balloon_planner
     if (!m_constraint_states.count(state_name))
     {
       const auto ret = std::begin(m_constraint_states)->second;
-      ROS_ERROR("[%s]: constraints for state '%s' were not specified! Using constraints '%s'.", m_node_name.c_str(), state_name.c_str(), ret.c_str());
+      ROS_ERROR_THROTTLE(1.0, "[%s]: constraints for state '%s' were not specified! Using constraints '%s'.", m_node_name.c_str(), state_name.c_str(), ret.c_str());
       return ret;
     }
     const auto ret = m_constraint_states.at(state_name);
@@ -653,11 +691,23 @@ namespace balloon_planner
   }
   //}
 
+  /* reset_detector() method //{ */
+  void BalloonPlanner::reset_detector()
+  {
+    std_srvs::Trigger::Request req;
+    std_srvs::Trigger::Response res;
+    if (m_srv_reset_detector.call(req, res))
+      ROS_INFO("Detector response: %s", res.message.c_str());
+    else
+      ROS_ERROR("Failed to call service to reset the detector!");
+  }
+  //}
+
   /* reset_filter() method //{ */
   void BalloonPlanner::reset_filter()
   {
-    balloon_filter::ResetEstimatesRequest req;
-    balloon_filter::ResetEstimatesResponse res;
+    std_srvs::Trigger::Request req;
+    std_srvs::Trigger::Response res;
     if (m_srv_reset_filter.call(req, res))
       ROS_INFO("Filter response: %s", res.message.c_str());
     else
@@ -1683,7 +1733,8 @@ namespace balloon_planner
 
     /* services //{ */
 
-    m_srv_reset_filter = nh.serviceClient<balloon_filter::ResetEstimates>("reset_balloon_filter");
+    m_srv_reset_detector = nh.serviceClient<std_srvs::Trigger>("reset_detector");
+    m_srv_reset_filter = nh.serviceClient<std_srvs::Trigger>("reset_balloon_filter");
     m_srv_set_constraints = nh.serviceClient<mrs_msgs::String>("set_constraints");
     m_srv_land_there = nh.serviceClient<mrs_msgs::ReferenceStampedSrv>("land_there");
 
@@ -1703,7 +1754,7 @@ namespace balloon_planner
     //}
 
     m_ball_positions.reserve(200);
-    m_state = state_enum::going_to_nextpos;
+    m_state = state_enum::going_to_nextpos_low;
 
     m_pogo_height_range = m_pogo_max_height - m_pogo_min_height;
 
