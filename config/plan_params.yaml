@@ -14,7 +14,7 @@ lurking:
   min_observing_duration: 80.0 # the target must be observed at least this amount of seconds to start lurking
   min_last_points: 10 # how many last points at minimum to use when RANSACing the lurking position
   min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position
-  passthrough_detection_distance: 4.0 # metres - when distance of the ball is smaller, the signed distnace from YZ lurk plane will be used for detecting passthrough
+  passthrough_detection_distance: 10.0 # metres - when distance of the ball is smaller, the signed distnace from YZ lurk plane will be used for detecting passthrough
 
 trajectory:
   sampling_dt: 0.2 # seconds

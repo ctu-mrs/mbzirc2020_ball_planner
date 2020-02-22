@@ -61,7 +61,7 @@ windows:
   - detector:
       layout: even-vertical
       panes:
-        - waitForControl; roslaunch object_detect object_detect.launch
+        - waitForControl; roslaunch uav_detect detect_pcl.launch
   - filter:
       layout: even-vertical
       panes:

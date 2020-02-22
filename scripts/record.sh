@@ -3,6 +3,8 @@
 path="/home/\$(optenv USER mrs)/bag_files/latest/"
 
 exclude=(
+# raw oustr data
+'(.*)ouster_driver(.*)'
 # bluefox
 '/$(arg UAV_NAME)/bluefox/image_raw'
 '/$(arg UAV_NAME)/bluefox/image_raw/compressed/(.*)'
@@ -39,6 +41,8 @@ exclude=(
 # '(.*)rs_d435(.*)infra(.*)/image_rect_raw'
 # '(.*)rs_d435(.*)infra(.*)compressed/(.*)'
 '(.*)rs_d435(.*)infra(.*)'
+# uav detect shit
+'(.*)uav_detect(.*)lidar_fov'
 # Depth detect compressed
 '(.*)depth_detect(.*)processed_depthmap'
 '(.*)depth_detect(.*)processed_depthmap/compressed(.*)'

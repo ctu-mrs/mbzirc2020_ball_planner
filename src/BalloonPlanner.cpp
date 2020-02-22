@@ -58,6 +58,13 @@ namespace balloon_planner
       return;
     }
 
+    if (m_land)
+    {
+      ROS_ERROR_STREAM("[STATEMACH]: LANDING!!!!");
+      land_there(m_landing_pose);
+      return;
+    }
+
     if (!m_activated)
     {
       ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: INACTIVE");
@@ -72,7 +79,7 @@ namespace balloon_planner
 
     {
       const auto desired_constraints = pick_constraints(m_state);
-      ROS_INFO_STREAM_THROTTLE(1.0, "[BallPlanner]: Setting '" << desired_constraints << "' constraints.");
+      /* ROS_INFO_STREAM_THROTTLE(1.0, "[BallPlanner]: Setting '" << desired_constraints << "' constraints."); */
       set_constraints(desired_constraints);
     }
 
@@ -729,7 +736,7 @@ namespace balloon_planner
     if (m_srv_land_there.call(req, res))
       ROS_INFO("Filter response: %s", res.message.c_str());
     else
-      ROS_ERROR("Failed to call service to reset the filter!");
+      ROS_ERROR("Failed to call service to land there!");
     return res.success;
   }
   //}
@@ -1714,6 +1721,7 @@ namespace balloon_planner
 
     m_srv_start = nh.advertiseService("start_state_machine", &BalloonPlanner::start_callback, this);
     m_srv_stop = nh.advertiseService("stop_state_machine", &BalloonPlanner::stop_callback, this);
+    m_srv_land = nh.advertiseService("land", &BalloonPlanner::land_callback, this);
 
     //}
 
@@ -1795,6 +1803,20 @@ namespace balloon_planner
     else
       resp.message = "Deactivated state machine.";
     m_activated = false;
+    resp.success = true;
+    m_state = state_enum::going_to_nextpos_low;
+    return true;
+  }
+
+  //}
+
+  /* BalloonPlanner::land_callback() method //{ */
+
+  bool BalloonPlanner::land_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
+  {
+    resp.message = "LANDING IN SATAN'S NAME!";
+    m_activated = false;
+    m_land = true;
     resp.success = true;
     return true;
   }

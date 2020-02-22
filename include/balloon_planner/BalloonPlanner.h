@@ -229,6 +229,7 @@ namespace balloon_planner
 
       ros::ServiceServer m_srv_start;
       ros::ServiceServer m_srv_stop;
+      ros::ServiceServer m_srv_land;
 
       ros::ServiceClient m_srv_reset_detector;
       ros::ServiceClient m_srv_reset_filter;
@@ -244,6 +245,7 @@ namespace balloon_planner
     private:
       bool m_initialized;
       bool m_activated;
+      bool m_land;
 
       state_t m_state;
       strat_t m_strat;
@@ -327,6 +329,7 @@ namespace balloon_planner
 
       bool start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp);
       bool stop_callback(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp);
+      bool land_callback(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp);
 
   };
   

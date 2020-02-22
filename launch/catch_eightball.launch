@@ -52,7 +52,7 @@
       <remap from="~reset_balloon_filter" to="balloon_filter/reset_estimates" />
       <remap from="~reset_detector" to="uav_detection/reset" />
       <remap from="~set_constraints" to="constraint_manager/set_constraints" />
-      <remap from="~land_there" to="constraint_manager/land_there" />
+      <remap from="~land_there" to="uav_manager/land_there" />
 
     </node>
 
