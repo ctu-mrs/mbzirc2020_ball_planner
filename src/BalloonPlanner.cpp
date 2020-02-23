@@ -171,8 +171,6 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_DETECTION'");
         /*  //{ */
 
-        // TODO: change the height until we get a detection
-        // TODO: also probably some sweeping
         // | ------------------- POGO POGO POGO POGO ------------------ |
         const double pogo_dt = (ros::Time::now() - m_pogo_prev_time).toSec();
         const double pogo_height = std::clamp(m_pogo_prev_height + m_pogo_direction*pogo_dt*m_pogo_speed, m_pogo_min_height, m_pogo_max_height);
@@ -225,13 +223,13 @@ namespace balloon_planner
         {
           const vec4_t ball_pose = ball_pose_stamped_opt.value().pose;
           observe_pose.z() = ball_pose.z();
-          if (cur_pos_yaw_opt.has_value())
-          {
-            const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
-            const vec3_t diff_vec = ball_pose.block<3, 1>(0, 0) - cur_pos;
-            const double yaw = std::atan2(diff_vec.y(), diff_vec.x());
-            observe_pose.w() = yaw;
-          }
+          /* if (cur_pos_yaw_opt.has_value()) */
+          /* { */
+          /*   const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0); */
+          /*   const vec3_t diff_vec = ball_pose.block<3, 1>(0, 0) - cur_pos; */
+          /*   const double yaw = std::atan2(diff_vec.y(), diff_vec.x()); */
+          /*   observe_pose.w() = yaw; */
+          /* } */
           ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using detection height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
                             time_since_last_det_msg.toSec(), observe_pose.z());
         }
