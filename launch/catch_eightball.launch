@@ -47,6 +47,8 @@
       <remap from="~ball_positions" to="~ball_positions$(arg suf)" />
       <remap from="~lurking_points" to="~lurking_points$(arg suf)" />
       <remap from="~lurking_position" to="~lurking_position$(arg suf)" />
+      <remap from="~yz_plane" to="~yz_plane$(arg suf)" />
+      <remap from="~intersection_point" to="~intersection_point$(arg suf)" />
 
       <!-- Services -->
       <remap from="~reset_balloon_filter" to="balloon_filter/reset_estimates" />
