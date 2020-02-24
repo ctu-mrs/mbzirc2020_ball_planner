@@ -171,8 +171,6 @@ namespace balloon_planner
         ROS_WARN_STREAM_THROTTLE(1.0, "[STATEMACH]: Current state: 'WAITING_FOR_DETECTION'");
         /*  //{ */
 
-        // TODO: change the height until we get a detection
-        // TODO: also probably some sweeping
         // | ------------------- POGO POGO POGO POGO ------------------ |
         const double pogo_dt = (ros::Time::now() - m_pogo_prev_time).toSec();
         const double pogo_height = std::clamp(m_pogo_prev_height + m_pogo_direction*pogo_dt*m_pogo_speed, m_pogo_min_height, m_pogo_max_height);
@@ -225,13 +223,13 @@ namespace balloon_planner
         {
           const vec4_t ball_pose = ball_pose_stamped_opt.value().pose;
           observe_pose.z() = ball_pose.z();
-          if (cur_pos_yaw_opt.has_value())
-          {
-            const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0);
-            const vec3_t diff_vec = ball_pose.block<3, 1>(0, 0) - cur_pos;
-            const double yaw = std::atan2(diff_vec.y(), diff_vec.x());
-            observe_pose.w() = yaw;
-          }
+          /* if (cur_pos_yaw_opt.has_value()) */
+          /* { */
+          /*   const vec3_t cur_pos = cur_pos_yaw_opt.value().block<3, 1>(0, 0); */
+          /*   const vec3_t diff_vec = ball_pose.block<3, 1>(0, 0) - cur_pos; */
+          /*   const double yaw = std::atan2(diff_vec.y(), diff_vec.x()); */
+          /*   observe_pose.w() = yaw; */
+          /* } */
           ROS_INFO_THROTTLE(1.0, "[OBSERVING]: Observing for %.2fs/%.2fs. Last seen before %.2fs. Using detection height of %.2fm.", observing_dur.toSec(), m_lurking_min_observing_dur.toSec(),
                             time_since_last_det_msg.toSec(), observe_pose.z());
         }
@@ -530,10 +528,10 @@ namespace balloon_planner
               ROS_INFO_THROTTLE(1.0, "[LURKING]: Ball is too far (%.2fm > %.2fm), not reacting yet.", ball_dist, m_lurking_reaction_dist);
             } else
             {
-              ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw according to detection.");
+              ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw and height according to detection.");
               const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
               const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
-              intercept_pos_opt = cur_cmd_pos_yaw;
+              intercept_pos_opt = m_cur_lurk_pose;
               intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset;  // set the height according to the detection height
               intercept_pos_opt.value().w() = yaw;                                // set the yaw according to the direction of the detection
             }
@@ -582,13 +580,15 @@ namespace balloon_planner
           if (intercept_pos_opt.has_value() && !is_behind_yzplane)
           {
             auto lurking_pose = intercept_pos_opt.value();
-            const auto lurking_point = lurking_pose.block<3, 1>(0, 0);
+            /* const auto lurking_point = lurking_pose.block<3, 1>(0, 0); */
             // limit the maximal reposition to m_lurking_max_reposition from the original lurk position
-            const vec3_t orig_point_offset = m_orig_lurk_pose.block<3, 1>(0, 0) + vec3_t(0, 0, m_lurking_z_offset);
-            const vec3_t reposition = lurking_point - orig_point_offset;
-            const double repos_dist = reposition.norm();
+            const vec3_t orig_pose_offset = m_orig_lurk_pose.block<3, 1>(0, 0) + vec3_t(0, 0, m_lurking_z_offset);
+            vec3_t reposition = lurking_pose.block<3, 1>(0, 0) - orig_pose_offset;
+            double repos_dist = reposition.norm();
             if (repos_dist > m_lurking_max_reposition)
-              lurking_pose.block<3, 1>(0, 0) = orig_point_offset.block<3, 1>(0, 0) + reposition / repos_dist * m_lurking_max_reposition;
+              lurking_pose.block<3, 1>(0, 0) = orig_pose_offset.block<3, 1>(0, 0) + reposition / repos_dist * m_lurking_max_reposition;
+            reposition = lurking_pose.block<3, 1>(0, 0) - orig_pose_offset;
+            repos_dist = reposition.norm();
 
             m_cur_lurk_pose_offset = lurking_pose;
             m_cur_lurk_pose = lurking_pose - vec4_t(0, 0, m_lurking_z_offset, 0);

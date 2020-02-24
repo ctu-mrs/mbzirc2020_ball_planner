@@ -36,9 +36,9 @@
       <remap from="~ball_detection" to="uav_detection/detection$(arg suf)" />
       <remap from="~ball_prediction" to="balloon_filter/prediction$(arg suf)" />
       <remap from="~ball_passthrough" to="balloon_filter/line_endpose$(arg suf)" />
-      <remap from="~cmd_odom" to="control_manager/cmd_odom$(arg suf)" />
-      <remap from="~main_odom" to="odometry/odom_main$(arg suf)" />
-      <remap from="~tracker_diagnostics" to="control_manager/mpc_tracker/diagnostics$(arg suf)" />
+      <remap from="~cmd_odom" to="control_manager/cmd_odom" />
+      <remap from="~main_odom" to="odometry/odom_main" />
+      <remap from="~tracker_diagnostics" to="control_manager/mpc_tracker/diagnostics" />
 
       <!-- Publishers -->
       <!-- <remap from="~commanded_trajectory" to="~commanded_trajectory" /> -->
@@ -47,6 +47,8 @@
       <remap from="~ball_positions" to="~ball_positions$(arg suf)" />
       <remap from="~lurking_points" to="~lurking_points$(arg suf)" />
       <remap from="~lurking_position" to="~lurking_position$(arg suf)" />
+      <remap from="~yz_plane" to="~yz_plane$(arg suf)" />
+      <remap from="~intersection_point" to="~intersection_point$(arg suf)" />
 
       <!-- Services -->
       <remap from="~reset_balloon_filter" to="balloon_filter/reset_estimates" />

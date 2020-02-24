@@ -3,7 +3,7 @@ land_at_end: true
 planning_period: 0.1 # seconds
 
 # detections and predictions older than this are ignored
-max_unseen_duration: 1.0 # seconds
+max_unseen_duration: 3.0 # seconds
 
 approach_speed: 6.0 # metres per second
 
@@ -11,7 +11,7 @@ lurking:
   z_offset: 0.2 # metres
   reaction_dist: 15.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
   max_reposition: 6.0 # metres
-  min_observing_duration: 80.0 # the target must be observed at least this amount of seconds to start lurking
+  min_observing_duration: 30.0 # the target must be observed at least this amount of seconds to start lurking
   min_last_points: 10 # how many last points at minimum to use when RANSACing the lurking position - UNUSED
   min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position - UNUSED
   passthrough_detection_distance: 10.0 # metres - when distance of the ball is smaller, the signed distnace from YZ lurk plane will be used for detecting passthrough
@@ -21,7 +21,7 @@ lurking:
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_reached_distance: 0.5 # metre - at this distance from the target point it is considered to be reached
+  target_reached_distance: 666.5 # metre - at this distance from the target point it is considered to be reached
   default_speed: 3.0 # metres per second - used for boring maneuvres (such as from obs. pos. to lurk pos.)
 
 pogo:
