@@ -497,21 +497,29 @@ namespace balloon_planner
                 ROS_INFO_THROTTLE(1.0, "[LURKING]: Ball is too far (%.2fm > %.2fm), not reacting yet.", ball_dist, m_lurking_reaction_dist);
               } else
               {
-                const auto intercept_point_opt = path_plane_intersection(pred_path, intersect_plane);
-                if (intercept_point_opt.has_value())
+                const double signed_ball_dist = signed_point_plane_distance(ball_pos, intersect_plane);
+                if (signed_ball_dist < 0.0)
                 {
-                  ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting position according to prediction.");
-                  const auto intercept_point = intercept_point_opt.value();
-                  if (m_pub_dbg_int_pt.getNumSubscribers() > 0)
-                    m_pub_dbg_int_pt.publish(to_msg(intercept_point, header));
+                  ROS_WARN_THROTTLE(1.0, "[LURKING]: Ball is behind YZ plane (signed dist: %.2fm), ignoring prediction.", signed_ball_dist);
+                }
+                else
+                {
+                  const auto intercept_point_opt = path_plane_intersection(pred_path, intersect_plane);
+                  if (intercept_point_opt.has_value())
+                  {
+                    ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting position according to prediction.");
+                    const auto intercept_point = intercept_point_opt.value();
+                    if (m_pub_dbg_int_pt.getNumSubscribers() > 0)
+                      m_pub_dbg_int_pt.publish(to_msg(intercept_point, header));
 
-                  const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
-                  const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
-                  const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z() + m_lurking_z_offset, yaw);
-                  intercept_pos_opt = intercept_pos;
-                } else
-                {
-                  ROS_WARN_THROTTLE(1.0, "[LURKING]: Predicted trajectory doesn't intersect the XY lurking plane! Ignoring it.");
+                    /* const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized(); */
+                    /* const double yaw = std::atan2(dir_vec.y(), dir_vec.x()); */
+                    const vec4_t intercept_pos(intercept_point.x(), intercept_point.y(), intercept_point.z() + m_lurking_z_offset, m_cur_lurk_pose.w());
+                    intercept_pos_opt = intercept_pos;
+                  } else
+                  {
+                    ROS_WARN_THROTTLE(1.0, "[LURKING]: Predicted trajectory doesn't intersect the XY lurking plane! Ignoring it.");
+                  }
                 }
               }
             }
@@ -529,11 +537,10 @@ namespace balloon_planner
             } else
             {
               ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw and height according to detection.");
-              const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized();
-              const double yaw = std::atan2(dir_vec.y(), dir_vec.x());
+              /* const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized(); */
+              /* const double yaw = std::atan2(dir_vec.y(), dir_vec.x()); */
               intercept_pos_opt = m_cur_lurk_pose;
               intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset;  // set the height according to the detection height
-              intercept_pos_opt.value().w() = yaw;                                // set the yaw according to the direction of the detection
             }
           }
           //}
