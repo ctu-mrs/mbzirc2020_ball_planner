@@ -525,25 +525,25 @@ namespace balloon_planner
             }
           }
           //}
-          if (!intercept_pos_opt.has_value() && ball_pose_stamped_opt.has_value())
-          /* otherwise use the detection (if available) to orient the lurker and set its height //{ */
-          {
-            const auto ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0);
-            const double ball_dist = (ball_pos - cur_cmd_pos).norm();
-            ball_pos_opt = ball_pos;
-            if (ball_dist > m_lurking_reaction_dist)
-            {
-              ROS_INFO_THROTTLE(1.0, "[LURKING]: Ball is too far (%.2fm > %.2fm), not reacting yet.", ball_dist, m_lurking_reaction_dist);
-            } else
-            {
-              ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw and height according to detection.");
-              /* const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized(); */
-              /* const double yaw = std::atan2(dir_vec.y(), dir_vec.x()); */
-              intercept_pos_opt = m_cur_lurk_pose;
-              intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset;  // set the height according to the detection height
-            }
-          }
-          //}
+          /* if (!intercept_pos_opt.has_value() && ball_pose_stamped_opt.has_value()) */
+          /* /1* otherwise use the detection (if available) to orient the lurker and set its height //{ *1/ */
+          /* { */
+          /*   const auto ball_pos = ball_pose_stamped_opt.value().pose.block<3, 1>(0, 0); */
+          /*   const double ball_dist = (ball_pos - cur_cmd_pos).norm(); */
+          /*   ball_pos_opt = ball_pos; */
+          /*   if (ball_dist > m_lurking_reaction_dist) */
+          /*   { */
+          /*     ROS_INFO_THROTTLE(1.0, "[LURKING]: Ball is too far (%.2fm > %.2fm), not reacting yet.", ball_dist, m_lurking_reaction_dist); */
+          /*   } else */
+          /*   { */
+          /*     ROS_INFO_THROTTLE(1.0, "[LURKING]: Adapting yaw and height according to detection."); */
+          /*     /1* const vec3_t dir_vec = (ball_pos - cur_cmd_pos).normalized(); *1/ */
+          /*     /1* const double yaw = std::atan2(dir_vec.y(), dir_vec.x()); *1/ */
+          /*     intercept_pos_opt = m_cur_lurk_pose; */
+          /*     intercept_pos_opt.value().z() = ball_pos.z() + m_lurking_z_offset;  // set the height according to the detection height */
+          /*   } */
+          /* } */
+          /* //} */
           if (!intercept_pos_opt.has_value())
           /* if neither prediction nor prediction is available, just stay at the current position //{ */
           {
