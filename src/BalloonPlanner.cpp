@@ -490,7 +490,8 @@ namespace balloon_planner
             } else
             {
               const auto ball_pos = to_eigen(pred_path.poses.front().pose.position);
-              const double ball_dist = (ball_pos - cur_cmd_pos).norm();
+              /* const double ball_dist = (ball_pos - cur_cmd_pos).norm(); */
+              const double ball_dist = (ball_pos - m_cur_lurk_pose_offset.block<3, 1>(0, 0)).norm();
               ball_pos_opt = ball_pos;
               if (ball_dist > m_lurking_reaction_dist)
               {
