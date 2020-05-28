@@ -49,7 +49,7 @@ start_position:
     6.0,   # x coordinate (metres)
     -8.0,  # y coordinate (metres)
     10.0,   # z coordinate (metres)
-    0.0    # yaw (radians)
+    0.95    # yaw (radians)
   ]
 
 landing_height: 5.5 # metres
