@@ -11,7 +11,7 @@ lurking:
   z_offset: 0.2 # metres
   reaction_dist: 8.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
   max_reposition: 6.0 # metres
-  min_observing_duration: 55.0 # the target must be observed at least this amount of seconds to start lurking
+  min_observing_duration: 60.0 # the target must be observed at least this amount of seconds to start lurking
   min_last_points: 10 # how many last points at minimum to use when RANSACing the lurking position - UNUSED
   min_last_duration: 3 # how many last sedonds at minimum to use when RANSACing the lurking position - UNUSED
   passthrough_detection_distance: 10.0 # metres - when distance of the ball is smaller, the signed distnace from YZ lurk plane will be used for detecting passthrough
@@ -21,7 +21,7 @@ lurking:
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
-  target_reached_distance: 666.5 # metre - at this distance from the target point it is considered to be reached
+  target_reached_distance: 0.5 # metre - at this distance from the target point it is considered to be reached
   default_speed: 3.0 # metres per second - used for boring maneuvres (such as from obs. pos. to lurk pos.)
 
 pogo:
@@ -31,33 +31,31 @@ pogo:
 
 constraint_states:
   {
-    "going_to_nextpos": "ballcatch_slow",
-    "going_to_nextpos_low": "ballcatch_slow",
-    "waiting_for_detection": "ballcatch_slow",
-    "observing": "ballcatch_slow",
-    "yawing_detection": "ballcatch_slow",
-    "following_detection": "ballcatch_slow",
-    "following_prediction": "ballcatch_slow",
-    "going_to_lurk_down": "ballcatch_slow",
-    "going_to_lurk_horizontal": "ballcatch_slow",
-    "going_to_lurk_up": "ballcatch_slow",
-    "lurking": "ballcatch_fast",
+    "going_to_nextpos": "slow",
+    "going_to_nextpos_low": "slow",
+    "waiting_for_detection": "slow",
+    "observing": "slow",
+    "yawing_detection": "slow",
+    "following_detection": "slow",
+    "following_prediction": "slow",
+    "going_to_lurk_down": "slow",
+    "going_to_lurk_horizontal": "slow",
+    "going_to_lurk_up": "slow",
+    "lurking": "fast",
   }
 
 start_position:
   [
-    6.0,   # x coordinate (metres)
-    -8.0,  # y coordinate (metres)
+    0.0,   # x coordinate (metres)
+    -20.0,  # y coordinate (metres)
     10.0,   # z coordinate (metres)
-    0.95    # yaw (radians)
+    1.57    # yaw (radians)
   ]
 
 landing_height: 5.5 # metres
 ## ############### NOW SPECIFIED IN THE WORLD FILE ###############
-# landing_position:
-#   [
-#     -30.0,   # x coordinate (metres)
-#     0.0,  # y coordinate (metres)
-#     5.0,   # z coordinate (metres)
-#     0.0    # yaw (radians)
-#   ]
+dropoff_center:
+  [
+    0.0,   # x coordinate (metres)
+    -25.0,  # y coordinate (metres)
+  ]

@@ -11,18 +11,18 @@ windows:
   - gazebo:
       layout: even-vertical
       panes:
-        - waitForRos; export DISPLAY=:1; roslaunch balloon_simulation simulation.launch gui:=false
+        - waitForRos; roslaunch balloon_simulation simulation.launch
         - waitForRos; roslaunch balloon_attacher attacher.launch
   - spawn:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --file spawn62.csv
+        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ouster --ouster-model OS1-64 --use-gpu-ray --file spawn62.csv
         - export UAV_NAME=uav60; waitForSimulation; spawn 60 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ball-holder --file spawn60.csv
   - control:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav62; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
-        - export UAV_NAME=uav60; waitForOdometry; roslaunch mrs_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
+        - export UAV_NAME=uav62; waitForOdometry; roslaunch mrs_uav_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
+        - export UAV_NAME=uav60; waitForOdometry; roslaunch mrs_uav_general core.launch config_constraint_manager:=./custom_configs/constraint_manager.yaml config_mpc_tracker:=./custom_configs/mpc_tracker.yaml config_odometry:=./custom_configs/odometry.yaml config_uav_manager:=./custom_configs/uav_manager.yaml config_landoff_tracker:=./custom_configs/landoff_tracker.yaml
   - takeoff:
       layout: even-vertical
       panes:
@@ -52,12 +52,17 @@ windows:
       layout: even-vertical
       panes:
         - '
+          export UAV_NAME=uav60;
           waitForControl;
           roslaunch balloon_filter generate_eight.launch;
           roslaunch balloon_filter load_eight.launch loop:=true;
           sleep 15;
           roslaunch balloon_filter start_following_eight.launch;
           '
+  - tf_connector:
+      layout: even-vertical
+      panes:
+        - roslaunch balloon_filter tf_connector.launch
   - detector:
       layout: even-vertical
       panes:
@@ -70,6 +75,7 @@ windows:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch balloon_planner catch_eightball.launch
+        - 'rosservice call /uav62/balloon_planner/start_state_machine "value: 0"'
   - mrs_status:
       layout: even-vertical
       panes:
