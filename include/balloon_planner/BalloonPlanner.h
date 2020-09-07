@@ -34,10 +34,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 // MRS stuff
-#include <mrs_lib/Profiler.h>
-#include <mrs_lib/ParamLoader.h>
+#include <mrs_lib/param_loader.h>
 #include <mrs_lib/subscribe_handler.h>
-#include <mrs_lib/DynamicReconfigureMgr.h>
+#include <mrs_lib/dynamic_reconfigure_mgr.h>
 #include <mrs_lib/geometry_utils.h>
 
 // Boost
@@ -52,7 +51,7 @@
 #include <balloon_filter/BallPrediction.h>
 #include <balloon_planner/PlanningParamsConfig.h>
 #include <balloon_filter/ResetEstimates.h>
-#include <mrs_msgs/TrackerTrajectory.h>
+#include <mrs_msgs/TrajectoryReference.h>
 
 //}
 
@@ -69,7 +68,7 @@ namespace balloon_planner
   using vec4_t = Eigen::Vector4d;
   using quat_t = Eigen::Quaterniond;
   using path_t = nav_msgs::Path;
-  using traj_t = mrs_msgs::TrackerTrajectory;
+  using traj_t = mrs_msgs::TrajectoryReference;
 
   namespace state_enum
   {
@@ -160,9 +159,6 @@ namespace balloon_planner
       void delayed_init([[maybe_unused]] const ros::TimerEvent& evt);
 
     private:
-      std::unique_ptr<mrs_lib::Profiler> m_profiler_ptr;
-
-    private:
 
       // --------------------------------------------------------------
       // |                ROS-related member variables                |
@@ -210,12 +206,12 @@ namespace balloon_planner
       std::unique_ptr<drmgr_t> m_drmgr_ptr;
       tf2_ros::Buffer m_tf_buffer;
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-      mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
-      mrs_lib::SubscribeHandlerPtr<geometry_msgs::PoseStamped> m_sh_ball_passthrough;
-      mrs_lib::SubscribeHandlerPtr<balloon_filter::BallPrediction> m_sh_ball_prediction;
-      mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_cmd_odom;
-      mrs_lib::SubscribeHandlerPtr<nav_msgs::Odometry> m_sh_main_odom;
-      mrs_lib::SubscribeHandlerPtr<mrs_msgs::MpcTrackerDiagnostics> m_sh_tracker_diags;
+      mrs_lib::SubscribeHandler<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
+      mrs_lib::SubscribeHandler<geometry_msgs::PoseStamped> m_sh_ball_passthrough;
+      mrs_lib::SubscribeHandler<balloon_filter::BallPrediction> m_sh_ball_prediction;
+      mrs_lib::SubscribeHandler<nav_msgs::Odometry> m_sh_cmd_odom;
+      mrs_lib::SubscribeHandler<nav_msgs::Odometry> m_sh_main_odom;
+      mrs_lib::SubscribeHandler<mrs_msgs::MpcTrackerDiagnostics> m_sh_tracker_diags;
 
       ros::Publisher m_pub_cmd_traj;
       ros::Publisher m_pub_dbg_traj;
