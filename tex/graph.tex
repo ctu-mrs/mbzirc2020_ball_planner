@@ -1,0 +1,53 @@
+\documentclass{standalone}
+\usepackage{pgfplots}
+\usepackage{bm}
+\usepackage{siunitx}
+\usepackage[export]{adjustbox}
+\usetikzlibrary{arrows, decorations.pathmorphing, backgrounds, positioning,fit,petri}
+\usetikzlibrary{calc}
+
+\usepackage{filecontents}
+
+\def\axisdefaultwidth{8cm}
+\def\axisdefaultheight{3cm}
+% \pgfplotsset{every axis/.append style={
+%                     legend style={font=\tiny,line width=.5pt,mark size=60pt},
+%                     }}
+\begin{document}
+
+\begin{tikzpicture}
+  \pgfplotsset{
+      scale only axis,
+      % scaled x ticks=false,
+      grid=both,
+      % minor tick num=4,
+      grid style={line width=.1pt, draw=black, dotted},
+      major grid style={line width=.2pt,draw=black, dotted},
+      legend pos=south east,
+      % legend style={font=\small},
+  }
+  \begin{axis}
+    [
+    % scale only axis,
+    % scaled x ticks=base 10:3,
+    xlabel={distance},
+    % xmin=0,
+    % xmax=80000,
+    % ytick={0,10000,...,80000},
+    ylabel={error},
+    y label style={at={(axis description cs:0.08,.5)},anchor=south},
+    % ymin = 0,
+    % ymax = 100,
+    % domain=0:1,
+    % ytick={0,20,40,53,60,80,100},
+    % ytick={0,20,...,100},
+    % xtick={0,15},
+    ]
+    \addplot [green!70!black, thick, dashed, only marks, mark=x]
+       table [x=class, y=err, col sep=comma] {../output/loc_out.csv};
+  \end{axis}
+\end{tikzpicture}
+
+\end{document} 
+
+

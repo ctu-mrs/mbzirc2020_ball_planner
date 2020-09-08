@@ -35,7 +35,8 @@ windows:
           rosservice call /$UAV_NAME/mavros/set_mode 0 offboard;
           rosservice call /$UAV_NAME/uav_manager/takeoff;
           sleep 8;
-          rosservice call /$UAV_NAME/control_manager/goto "goal: [4.0, -2.0, 7.0, 0.0]"'
+          rosservice call /$UAV_NAME/control_manager/goto "goal: [4.0, -2.0, 7.0, 0.0]";
+          roslaunch balloon_simulation publish_ground_truth_tf.launch'
         #}
         #{ uav2
         - '
@@ -46,7 +47,8 @@ windows:
           rosservice call /$UAV_NAME/mavros/set_mode 0 offboard;
           rosservice call /$UAV_NAME/uav_manager/takeoff;
           sleep 8;
-          rosservice call /$UAV_NAME/control_manager/goto "goal: [3.0, 3.0, 4.0, 0.6]"'
+          rosservice call /$UAV_NAME/control_manager/goto "goal: [3.0, 3.0, 4.0, 0.6]";
+          roslaunch balloon_simulation publish_ground_truth_tf.launch'
         #}
   - goto:
       layout: even-vertical
@@ -59,10 +61,10 @@ windows:
           sleep 15;
           roslaunch balloon_filter start_following_eight.launch;
           '
-  - tf_connector:
-      layout: even-vertical
-      panes:
-        - roslaunch balloon_filter tf_connector.launch
+  # - tf_connector:
+  #     layout: even-vertical
+  #     panes:
+  #       - roslaunch balloon_filter tf_connector.launch
   - detector:
       layout: even-vertical
       panes:
