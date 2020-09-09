@@ -33,39 +33,28 @@
     xmin=0,
     xmax=90,
     xlabel={sensor-target distance (\si{\metre})},
+    ylabel={class recall (\%)},
     y label style={at={(axis description cs:0.08,.5)},anchor=south},
-    ylabel={recall (\%)},
     ymin = 0,
     ymax = 100,
+    legend style={at={(1,1)}, anchor=north east}
     ]
-    \addplot [\cGreen, only marks, mark=o, mark size=0.9, thick]
-       table [x=dist, y expr={100.0*\thisrow{recall}}, col sep=comma] {../output/stats_out.csv};
-
-    \addplot [\cGreen, dashed, thick]
-       table [x=dist, y expr={100.0*\thisrow{pdet}}, col sep=comma] {../output/stats_out.csv};
+    \addplot [red, mark=*, mark size=0.9, thick, miter limit=1]
+       table [x=dist, y expr={100.0*\thisrow{pcclassA}}, col sep=comma] {../output/stats_out.csv};
+    \addplot [\cGreen, mark=*, mark size=0.9, thick, miter limit=1]
+       table [x=dist, y expr={100.0*\thisrow{pcclassB}}, col sep=comma] {../output/stats_out.csv};
+    \addplot [blue, mark=*, mark size=0.9, thick, miter limit=1]
+       table [x=dist, y expr={100.0*\thisrow{pcclassC}}, col sep=comma] {../output/stats_out.csv};
+    \legend{case \textbf{A}, case \textbf{B}, case \textbf{C}}
   \end{axis}
 
-  \begin{axis}
-    [
-    ytick={0,0.5,...,2},
-    xtick={0,10,...,90},
-    axis x line=none,
-    xmin=0,
-    xmax=90,
-    ylabel={localization error (\si{\metre})},
-    axis y line*=right,
-    y label style={at={(axis description cs:1.23,.5)},anchor=north},
-    ymin = 0,
-    ymax = 2,
-    ]
-    \addplot [red, only marks, thick, mark=x, mark size=1.5]
-       table [x=dist, y=err, col sep=comma] {../output/stats_out.csv};
-  \end{axis}
-
+  % ensure same size of both graphs
   \node [minimum width=9.3cm, minimum height=3.4cm, anchor=south west] {};
+
 \end{tikzpicture}
 % dist, err, recall, pdet, pcclassA, pcclassB, pcclassC
 
 \end{document} 
+
 
 

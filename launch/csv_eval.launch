@@ -7,7 +7,8 @@
   <arg     if="$(arg debug)" name="launch_prefix" value="pdb"/>
 
   <node name="localization_evaluation" pkg="balloon_planner" type="csv_eval.py" output="screen" launch-prefix="$(arg launch_prefix)">
-    <param name="out_fname" value="$(find balloon_planner)/output/loc_out.csv" />
+    <param name="in_fname" value="$(find balloon_planner)/output/loc_out.csv" />
+    <param name="out_fname" value="$(find balloon_planner)/output/stats_out.csv" />
   </node>
 
 </launch>

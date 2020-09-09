@@ -36,18 +36,23 @@ def det_callback(msg):
     for i in gen:
         pt = i
         break
-    cclass = pt[3]
-    pts = PointStamped()
-    pts.point.x = pt[0]
-    pts.point.y = pt[1]
-    pts.point.z = pt[2]
-    detpos_msg = tf2_geometry_msgs.do_transform_point(pts, trans).point
 
-    detpos = np.array([detpos_msg.x, detpos_msg.y, detpos_msg.z])
     bllpos = np.array([bllpos_msg.x, bllpos_msg.y, bllpos_msg.z])
     mavpos = np.array([mavpos_msg.x, mavpos_msg.y, mavpos_msg.z])
     dist = np.linalg.norm(mavpos - bllpos)
-    err = np.linalg.norm(detpos - bllpos)
+    err = np.nan
+    cclass = 4
+    if pt is not None: # not an empty point - got a detection
+        cclass = pt[3]
+        pts = PointStamped()
+        pts.point.x = pt[0]
+        pts.point.y = pt[1]
+        pts.point.z = pt[2]
+        detpos_msg = tf2_geometry_msgs.do_transform_point(pts, trans).point
+
+        detpos = np.array([detpos_msg.x, detpos_msg.y, detpos_msg.z])
+        err = np.linalg.norm(detpos - bllpos)
+
     datum = (msg.header.stamp.to_sec(), dist, err, cclass)
     print(datum)
     results.append(datum)
