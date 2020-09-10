@@ -35,7 +35,7 @@ windows:
           rosservice call /$UAV_NAME/mavros/set_mode 0 offboard;
           rosservice call /$UAV_NAME/uav_manager/takeoff;
           sleep 8;
-          rosservice call /$UAV_NAME/control_manager/goto "goal: [4.0, -2.0, 7.0, 0.0]";
+          rosservice call /$UAV_NAME/control_manager/goto "goal: [0.0, -20.0, 12.0, 1.57]";
           roslaunch balloon_simulation publish_ground_truth_tf.launch'
         #}
         #{ uav2
@@ -77,8 +77,9 @@ windows:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch balloon_planner catch_eightball.launch
-        - 'rosservice call /uav62/balloon_planner/start_state_machine "value: 0"'
+        - 'waitForControl; sleep 5; rosservice call /uav62/balloon_planner/start_state_machine "value: 0"'
   - mrs_status:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch mrs_status status.launch
+  - detach: tmux detach
