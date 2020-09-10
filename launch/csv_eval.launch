@@ -8,7 +8,8 @@
 
   <node name="localization_evaluation" pkg="balloon_planner" type="csv_eval.py" output="screen" launch-prefix="$(arg launch_prefix)">
     <param name="in_fname" value="$(find balloon_planner)/output/loc_out.csv" />
-    <param name="out_fname" value="$(find balloon_planner)/output/stats_out.csv" />
+    <param name="stats_out_fname" value="$(env HOME)/clanky/moje/mbzirc2020_ch1b/fig/src/data/stats_out.csv" />
+    <param name="class_out_fname" value="$(env HOME)/clanky/moje/mbzirc2020_ch1b/fig/src/data/class_out.csv" />
   </node>
 
 </launch>

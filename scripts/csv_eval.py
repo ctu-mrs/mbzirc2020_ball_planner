@@ -30,19 +30,77 @@ def load_csv_data(csv_fname):
             it += 1
     return data
 
-def put_to_file(data, fname):
+def put_to_file(labels, data, fname):
+    fmt_str = ",".join((["{:f}"]*len(data[0]))) + "\n"
     with open(fname, 'w') as ofhandle:
-        ofhandle.write("dist, err, recall, pdet, pcclassA, pcclassB, pcclassC\n")
+        ofhandle.write("{:s}\n".format(",".join(labels)))
         for it in range(0, len(data)):
-            ofhandle.write("{:f},{:f},{:f},{:f},{:f},{:f},{:f}\n".format(data[it][0], data[it][1], data[it][2], data[it][3], data[it][4], data[it][5], data[it][6]))
+            ofhandle.write(fmt_str.format(*data[it]))
 
-def process_class(data, label, hrange):
-    mean = np.mean(data)
+# #{ 
+
+def process_class(ofname, data, cclasses, hrange):
+    # mean = np.mean(data)
+    # std = np.std(data)
+    # print("Mean for {} is {}, std is {} ({} total samples)".format(label, mean, std, len(data)))
+
+    bin_w = 0.05 # m
+
+    bin_ctrs = list()
+    cclassA = list()
+    cclassB = list()
+    cclassC = list()
+    acclassA = list()
+    acclassB = list()
+    acclassC = list()
+
+    bin_ctrs.append(0.0)
+    cclassA.append(0.0)
+    cclassB.append(0.0)
+    cclassC.append(0.0)
+    acclassA.append(0.0)
+    acclassB.append(0.0)
+    acclassC.append(0.0)
+
+    min_err = 0
+    for max_err in np.arange(bin_w, hrange[1]+3*bin_w, bin_w):
+        idxs = np.logical_and(data > min_err, data <= max_err)
+
+        cur_cclasses = cclasses[idxs]
+        cur_cclassA = float(len(cur_cclasses[cur_cclasses == 2]))
+        cur_cclassB = float(len(cur_cclasses[cur_cclasses == 1]))
+        cur_cclassC = float(len(cur_cclasses[cur_cclasses == 0]))
+        cclassA.append(cur_cclassA)
+        cclassB.append(cur_cclassB)
+        cclassC.append(cur_cclassC)
+
+        acclassA.append(acclassA[-1] + cur_cclassA)
+        acclassB.append(acclassB[-1] + cur_cclassB)
+        acclassC.append(acclassC[-1] + cur_cclassC)
+
+        cur_bin_ctr = (max_err + min_err)/2.0
+        bin_ctrs.append(cur_bin_ctr)
+        min_err = max_err
+
+    pcclassA = cclassA/np.sum(cclassA)
+    pcclassB = cclassB/np.sum(cclassB)
+    pcclassC = cclassC/np.sum(cclassC)
+
+    acclassA = np.array(acclassA)/acclassA[-1]
+    acclassB = np.array(acclassB)/acclassB[-1]
+    acclassC = np.array(acclassC)/acclassC[-1]
+
     plt.figure()
-    plt.hist(data, bins=50, range=hrange, density=True)
-    # plt.plot([mean, mean], [0, 2])
-    plt.title(label)
-    print("Mean for {} is {} ({} total samples)".format(label, mean, len(data)))
+    plt.plot(bin_ctrs, pcclassA, "-.", bin_ctrs, pcclassB, "-.", bin_ctrs, pcclassC, "-.")
+    plt.legend(["class A", "class B", "class C"])
+    plt.ylabel("rate of class")
+    plt.xlabel("localization error (m)")
+
+    result = np.column_stack([bin_ctrs, pcclassA, pcclassB, pcclassC, acclassA, acclassB, acclassC])
+    labels = ["err,pcclassA,pcclassB,pcclassC,acclassA,acclassB,acclassC"]
+    put_to_file(labels, result, ofname)
+
+# #} end of 
 
 # #{ 
 
@@ -52,16 +110,18 @@ def process_dist(ofname, dists, errs, cclasses, hrange):
     mean_errs = list()
     recalls = list()
     bin_ctrs = list()
-    min_dist = -bin_w/2.0
+
     pcclassA = list()
     pcclassB = list()
     pcclassC = list()
+
+    min_dist = -bin_w/2.0
     for max_dist in np.arange(bin_w/2.0, hrange[1]+3*bin_w/2.0, bin_w):
         idxs = np.logical_and(dists > min_dist, dists <= max_dist)
         cur_errs = errs[idxs]
         cur_total = float(len(cur_errs))
         cur_detected = float(len(cur_errs[np.isfinite(cur_errs)]))
-        cur_recall = np.nan
+        cur_recall = 0.0
         cur_mean_err = np.nan
         if cur_total > 0:
             cur_recall = cur_detected/cur_total
@@ -93,11 +153,12 @@ def process_dist(ofname, dists, errs, cclasses, hrange):
     pdists = np.array(bin_ctrs)
     vang_res = (np.pi/180 * 45/64)
     hang_res = (2*np.pi / 2048)
-    n_pts_min = 1
+    n_vpts_min = 1
+    n_hpts_min = 3
     tgtw = 0.17
     tgth = 0.08 + 0.15 # mav height and ball height
-    pdet_vert = np.minimum( np.arctan(tgth/(pdists-tgtw/2))/(vang_res*n_pts_min), 1.0);
-    pdet_hori = np.minimum( np.arctan(tgtw/pdists)/(hang_res*3), 1.0);
+    pdet_vert = np.minimum( np.arctan(tgth/(pdists-tgtw/2))/(vang_res*n_vpts_min), 1.0);
+    pdet_hori = np.minimum( np.arctan(tgtw/pdists)/(hang_res*n_hpts_min), 1.0);
     pdet = pdet_vert * pdet_hori
     pdet[0] = 1.0
 
@@ -139,7 +200,8 @@ def process_dist(ofname, dists, errs, cclasses, hrange):
     print(len(pcclassB))
     print(len(pcclassC))
     result = np.column_stack([bin_ctrs, mean_errs, recalls, pdet, pcclassA, pcclassB, pcclassC])
-    put_to_file(result, ofname)
+    labels = ["dist,err,recall,pdet,pcclassA,pcclassB,pcclassC"]
+    put_to_file(labels,result, ofname)
 
 # #} end of 
 
@@ -148,16 +210,18 @@ def main():
     rospy.init_node("mbzirc2020_eval")
 
     ifname = rospy.get_param('~in_fname')
-    ofname = rospy.get_param('~out_fname')
+    stats_ofname = rospy.get_param('~stats_out_fname')
+    class_ofname = rospy.get_param('~class_out_fname')
     data = load_csv_data(ifname)
     dists = data[:, 1]
     errs = data[:, 2]
     cclasses = data[:, 3]
     max_dist = np.max(dists)
+    print("mean error: {}m, std. error: {}m".format(np.mean(errs[np.isfinite(errs)]), np.std(errs[np.isfinite(errs)])))
     print("max. det. dist: {}m".format(max_dist))
     print("max. hist. dist: {}m".format(10*np.ceil(max_dist/10)))
 
-    process_dist(ofname, dists, errs, cclasses, [0, 10*np.ceil(max_dist/10)])
+    process_dist(stats_ofname, dists, errs, cclasses, [0, 10*np.ceil(max_dist/10)])
     # plt.show()
 
     # process_class(dists[cclasses[:] == 0], "Class C distances", [0, 10*np.ceil(max_dist/10)])
@@ -167,9 +231,7 @@ def main():
     # plt.hist(dists)
     # plt.show()
 
-    # process_class(errs[cclasses[:] == 0], "Class C errors", [0,2])
-    # process_class(errs[cclasses[:] == 1], "Class B errors", [0,2])
-    # process_class(errs[cclasses[:] == 2], "Class A errors", [0,2])
+    process_class(class_ofname, errs, cclasses, [0,2])
     # plt.show()
 
 if __name__ == '__main__':
