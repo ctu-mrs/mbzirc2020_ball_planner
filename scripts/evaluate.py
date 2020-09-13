@@ -16,11 +16,12 @@ global_frame_id = "common_origin"
 
 bllpos_msg = None
 mavpos_msg = None
+dropos_msg = None
 
 results = list()
 
 def det_callback(msg):
-    global tf_buffer, bllpos_msg, results
+    global tf_buffer, bllpos_msg, mavpos_msg, dropos_msg, results
 
     if bllpos_msg is None:
         rospy.logwarn("no ballpose")
@@ -39,6 +40,7 @@ def det_callback(msg):
 
     bllpos = np.array([bllpos_msg.x, bllpos_msg.y, bllpos_msg.z])
     mavpos = np.array([mavpos_msg.x, mavpos_msg.y, mavpos_msg.z])
+    dropos = np.array([dropos_msg.x, dropos_msg.y, dropos_msg.z])
     dist = np.linalg.norm(mavpos - bllpos)
     err = np.nan
     cclass = 4
@@ -53,7 +55,7 @@ def det_callback(msg):
         detpos = np.array([detpos_msg.x, detpos_msg.y, detpos_msg.z])
         err = np.linalg.norm(detpos - bllpos)
 
-    datum = (msg.header.stamp.to_sec(), dist, err, cclass)
+    datum = (msg.header.stamp.to_sec(), mavpos[0], mavpos[1], mavpos[2], dropos[0], dropos[1], dropos[2], bllpos[0], bllpos[1], bllpos[2], dist, err, cclass)
     print(datum)
     results.append(datum)
 
@@ -71,11 +73,16 @@ def mav_callback(msg):
     global mavpos_msg
     mavpos_msg = msg.pose.pose.position
 
-def put_to_file(data, fname):
+def drone_callback(msg):
+    global dropos_msg
+    dropos_msg = msg.pose.pose.position
+
+def put_to_file(labels, data, fname):
+    fmt_str = ",".join((["{:f}"]*len(data[0]))) + "\n"
     with open(fname, 'w') as ofhandle:
-        ofhandle.write("time,dist,err,class\n")
+        ofhandle.write("{:s}\n".format(",".join(labels)))
         for it in range(0, len(data)):
-            ofhandle.write("{:f},{:f},{:f},{:d}\n".format(data[it][0], data[it][1], data[it][2], data[it][3]))
+            ofhandle.write(fmt_str.format(*data[it]))
     
 def main():
     global tf_buffer, results
@@ -89,9 +96,12 @@ def main():
     rospy.Subscriber("/uav62/uav_detection/detections_pc", PointCloud2, det_callback)
     rospy.Subscriber("/gazebo/link_states", LinkStates, ball_callback)
     rospy.Subscriber("/uav62/ground_truth_pose", PoseWithCovarianceStamped, mav_callback)
+    rospy.Subscriber("/uav60/ground_truth_pose", PoseWithCovarianceStamped, drone_callback)
 
     rospy.spin()
-    put_to_file(results, fname)
+    labels = ["stamp,mx,my,mz,dx,dy,dz,bx,by,bz,dist,err,cclass"]
+    put_to_file(labels, results, fname)
+    # put_to_file(results, fname)
 
 if __name__ == '__main__':
     main()

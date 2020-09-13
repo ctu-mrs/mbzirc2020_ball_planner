@@ -16,7 +16,7 @@ windows:
   - spawn:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ouster --ouster-model OS1-64 --use-gpu-ray --file spawn62.csv
+        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ouster --ouster-model OS1-32g1 --use-gpu-ray --file spawn62.csv
         - export UAV_NAME=uav60; waitForSimulation; spawn 60 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ball-holder --file spawn60.csv
   - control:
       layout: even-vertical
@@ -82,4 +82,3 @@ windows:
       layout: even-vertical
       panes:
         - waitForControl; roslaunch mrs_status status.launch
-  - detach: tmux detach

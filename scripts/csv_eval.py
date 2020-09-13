@@ -17,7 +17,7 @@ def load_csv_data(csv_fname):
     rospy.loginfo("Using CSV file {:s}".format(csv_fname))
 
     n_pos = sum(1 for line in open(csv_fname)) - 1
-    data = np.zeros((n_pos, 4))
+    data = np.zeros((n_pos, 13))
     it = 0
     with open(csv_fname, 'r') as fhandle:
         first_loaded = False
@@ -26,7 +26,16 @@ def load_csv_data(csv_fname):
             if not first_loaded:
                 first_loaded = True
                 continue
-            data[it, :] = np.array([float(row[0]), float(row[1]), float(row[2]), int(row[3])])
+#     0, 1, 2, 3, 4, 5, 6, 7, 8, 9,  10, 11,    12
+# stamp,mx,my,mz,dx,dy,dz,bx,by,bz,dist,err,cclass
+            stamp = float(row[0])
+            mpos = np.array([float(row[1]), float(row[2]), float(row[3])])
+            dpos = np.array([float(row[4]), float(row[5]), float(row[6])])
+            bpos = np.array([float(row[7]), float(row[8]), float(row[9])])
+            dist = float(row[10])
+            err = float(row[11])
+            cclass = float(row[12])
+            data[it, :] = np.array([stamp, mpos[0], mpos[1], mpos[2], dpos[0], dpos[1], dpos[2], bpos[0], bpos[1], bpos[2], dist, err, cclass])
             it += 1
     return data
 
@@ -104,8 +113,9 @@ def process_class(ofname, data, cclasses, hrange):
 
 # #{ 
 
-def process_dist(ofname, dists, errs, cclasses, hrange):
+def process_dist(ofname, mpos, dpos, bpos, dists, errs, cclasses, hrange):
     bin_w = 1.0 # m
+    vangle = 33.2/180.0*np.pi
 
     mean_errs = list()
     recalls = list()
@@ -119,12 +129,29 @@ def process_dist(ofname, dists, errs, cclasses, hrange):
     for max_dist in np.arange(bin_w/2.0, hrange[1]+3*bin_w/2.0, bin_w):
         idxs = np.logical_and(dists > min_dist, dists <= max_dist)
         cur_errs = errs[idxs]
-        cur_total = float(len(cur_errs))
+
+        cur_mposs = mpos[idxs, :]
+        cur_dposs = dpos[idxs, :]
+        cur_bposs = bpos[idxs, :]
+
+        mdvec = cur_dposs-cur_mposs
+        mdang = np.abs(np.arctan2(mdvec[:, 2], np.linalg.norm(mdvec[:, 0:2], axis=1)))
+        dpos_detectable = mdang < vangle/2.0
+
+        mbvec = cur_bposs-cur_mposs
+        mbang = np.abs(np.arctan2(mbvec[:, 2], np.linalg.norm(mbvec[:, 0:2], axis=1)))
+        bpos_detectable = mbang < vangle/2.0
+        # cur_valid = np.logical_or(dpos_detectable, bpos_detectable).sum()
+        cur_valid = float(dpos_detectable.sum())
+
+        # if not dpos_detectable.all() or not bpos_detectable.all():
+        #     print("JOOO")
+
         cur_detected = float(len(cur_errs[np.isfinite(cur_errs)]))
         cur_recall = 0.0
         cur_mean_err = np.nan
-        if cur_total > 0:
-            cur_recall = cur_detected/cur_total
+        if cur_valid > 0:
+            cur_recall = np.minimum(cur_detected/cur_valid, 1.0)
             cur_mean_err = np.mean(cur_errs[np.isfinite(cur_errs)])
         cur_bin_ctr = (max_dist + min_dist)/2.0
 
@@ -134,16 +161,19 @@ def process_dist(ofname, dists, errs, cclasses, hrange):
         min_dist = max_dist
 
         cur_cclasses = cclasses[idxs]
-        cur_cclassA = len(cur_cclasses[cur_cclasses == 2])
-        cur_cclassB = len(cur_cclasses[cur_cclasses == 1])
-        cur_cclassC = len(cur_cclasses[cur_cclasses == 0])
+        cur_cclassA = (cur_cclasses == 2).sum()
+        cur_cclassB = (cur_cclasses == 1).sum()
+        cur_cclassC = (cur_cclasses == 0).sum()
+        cur_cclassD = (cur_cclasses == 4).sum()
+        cur_cclassTot = cur_cclassA + cur_cclassB + cur_cclassC + cur_cclassD
+        print("{} + {} + {} + {} = {} (should be {})".format(cur_cclassA, cur_cclassB, cur_cclassC, cur_cclassD, cur_cclassTot, len(cur_cclasses)))
         cur_pcclassA = 0
         cur_pcclassB = 0
         cur_pcclassC = 0
-        if cur_detected > 0:
-            cur_pcclassA = cur_cclassA/cur_total
-            cur_pcclassB = cur_cclassB/cur_total
-            cur_pcclassC = cur_cclassC/cur_total
+        if cur_valid > 0:
+            cur_pcclassA = np.minimum(cur_cclassA/cur_valid, 1.0)
+            cur_pcclassB = np.minimum(cur_cclassB/cur_valid, 1.0)
+            cur_pcclassC = np.minimum(cur_cclassC/cur_valid, 1.0)
         pcclassA.append(cur_pcclassA)
         pcclassB.append(cur_pcclassB)
         pcclassC.append(cur_pcclassC)
@@ -151,15 +181,50 @@ def process_dist(ofname, dists, errs, cclasses, hrange):
     # calculation of the theoretical detection probability
     # pdists = np.arange(1, hrange[1], 0.1)
     pdists = np.array(bin_ctrs)
-    vang_res = (np.pi/180 * 45/64)
+    vang_res = (vangle/32)
     hang_res = (2*np.pi / 2048)
     n_vpts_min = 1
     n_hpts_min = 3
-    tgtw = 0.17
-    tgth = 0.08 + 0.15 # mav height and ball height
-    pdet_vert = np.minimum( np.arctan(tgth/(pdists-tgtw/2))/(vang_res*n_vpts_min), 1.0);
-    pdet_hori = np.minimum( np.arctan(tgtw/pdists)/(hang_res*n_hpts_min), 1.0);
+    tgtw = 0.15
+    tgth = 0.10 + 0.15 # mav height and ball height
+    # pdet_vert = np.zeros((len(pdists), n_vpts_min+1))
+    # for it in range(1, n_vpts_min+1):
+    #     pdet_vert[:, it] = np.minimum( np.arctan(tgth/(pdists-tgtw/2))/(vang_res*it), 1.0)
+    # for it in np.arange(n_vpts_min, 0, -1):
+    #     for it2 in range(0, it):
+    #         pdet_vert[:, it] -= pdet_vert[:, it2]
+
+    # pdet_hori = np.zeros((len(pdists), n_hpts_min+1))
+    # for it in range(1, n_hpts_min+1):
+    #     pdet_hori[:, it] = np.minimum( np.arctan(tgtw/pdists)/(hang_res*it), 1.0)
+    # for it in np.arange(n_hpts_min, 0, -1):
+    #     for it2 in range(0, it):
+    #         pdet_hori[:, it] -= pdet_hori[:, it2]
+    # pdet = np.minimum( \
+    #     pdet_vert[:, 1] * pdet_hori[:, 3] \
+    #     + pdet_vert[:, 2] * pdet_hori[:, 2] \
+    #     + pdet_vert[:, 2] * pdet_hori[:, 3] \
+    #     + pdet_vert[:, 3] * pdet_hori[:, 3] \
+    #     + pdet_vert[:, 3] * pdet_hori[:, 2] \
+    #     + pdet_vert[:, 3] * pdet_hori[:, 1] \
+    #                   , 1.0
+    #                   )
+    # print(pdet_vert)
+    # print(pdet_hori)
+    # pdet = \
+    #     pdet_vert[:, 1] * pdet_hori[:, 3] \
+    #     + pdet_vert[:, 2] * pdet_hori[:, 2] \
+    #     + pdet_vert[:, 2] * pdet_hori[:, 3] \
+    #     + pdet_vert[:, 3] * pdet_hori[:, 3] \
+    #     + pdet_vert[:, 3] * pdet_hori[:, 2] \
+    #     + pdet_vert[:, 3] * pdet_hori[:, 1] \
+
+    pray = 0.8
+    pdet_vert = np.minimum( pray*np.arctan(tgth/(pdists-tgtw/2))/(vang_res*n_vpts_min), 1.0)
+    pdet_hori = np.minimum( pray*np.arctan(tgtw/pdists)/(hang_res*n_hpts_min), 1.0)
     pdet = pdet_vert * pdet_hori
+
+    # pdet = pdet_hori
     pdet[0] = 1.0
 
     recalls[0] = 0.0
@@ -213,16 +278,21 @@ def main():
     stats_ofname = rospy.get_param('~stats_out_fname')
     class_ofname = rospy.get_param('~class_out_fname')
     data = load_csv_data(ifname)
-    dists = data[:, 1]
-    errs = data[:, 2]
-    cclasses = data[:, 3]
+#     0, 1, 2, 3, 4, 5, 6, 7, 8, 9,  10, 11,    12
+# stamp,mx,my,mz,dx,dy,dz,bx,by,bz,dist,err,cclass
+    mpos = data[:, 1:4]
+    dpos = data[:, 4:7]
+    bpos = data[:, 7:10]
+    dists = data[:, 10]
+    errs = data[:, 11]
+    cclasses = data[:, 12]
     max_dist = np.max(dists)
     print("mean error: {}m, std. error: {}m".format(np.mean(errs[np.isfinite(errs)]), np.std(errs[np.isfinite(errs)])))
     print("max. det. dist: {}m".format(max_dist))
-    print("max. hist. dist: {}m".format(10*np.ceil(max_dist/10)))
+    # print("max. hist. dist: {}m".format())
 
-    process_dist(stats_ofname, dists, errs, cclasses, [0, 10*np.ceil(max_dist/10)])
-    # plt.show()
+    process_dist(stats_ofname, mpos, dpos, bpos, dists, errs, cclasses, [0, 90])
+    plt.show()
 
     # process_class(dists[cclasses[:] == 0], "Class C distances", [0, 10*np.ceil(max_dist/10)])
     # process_class(dists[cclasses[:] == 1], "Class B distances", [0, 10*np.ceil(max_dist/10)])
