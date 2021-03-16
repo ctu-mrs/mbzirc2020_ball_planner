@@ -6,6 +6,10 @@ Other related packages:
  * the filtration and estimation algorithm: [`ball_filter`](https://github.com/ctu-mrs/mbzirc2020_ball_filter) [1]
  * the MRS UAV control and estimation pipeline: [`mrs_uav_system`](https://github.com/ctu-mrs/mrs_uav_system) [2]
 
+### To launch simulation, detection, localization and visualization:
+Use the `start.sh` script in `tmux_scripts/simulation`.
+Note that for the simulation you need to have the [`mrs_uav_system`](https://github.com/ctu-mrs/mrs_uav_system) installed.
+
 ----
 References:
  * [1]: M. Vrba, Y. Stasinchuk, T. Báča, V. Spurný, M. Petrlík, D. Heřt, D. Žaitlík and M. Saska, "Autonomous Capturing of Agile Flying Objects using MAVs: The *MBZIRC 2020* Challenge", submitted to the IEEE Transactions on Systems, Man and Cybernetics - Systems 2021.
