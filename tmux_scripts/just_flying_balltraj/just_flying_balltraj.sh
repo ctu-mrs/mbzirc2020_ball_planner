@@ -35,13 +35,13 @@ input=(
 '
   'TrajectoryLoader' '
 waitForControl;
-roslaunch balloon_filter generate_eight.launch;
-roslaunch balloon_filter load_eight.launch loop:=true;
+roslaunch ball_filter generate_eight.launch;
+roslaunch ball_filter load_eight.launch loop:=true;
 '
   'AutoStart' 'waitForRos; roslaunch mrs_general automatic_start_mbzirc.launch challenge:=ball
 '
-  'FlytToStart' 'roslaunch balloon_filter fly_to_start.launch'
-  'StartFollowing' 'roslaunch balloon_filter start_following_eight.launch'
+  'FlytToStart' 'roslaunch ball_filter fly_to_start.launch'
+  'StartFollowing' 'roslaunch ball_filter start_following_eight.launch'
   'MotorsOn' 'rosservice call /'"$UAV_NAME"'/control_manager/motors 1'
   'Takeoff' 'rosservice call /'"$UAV_NAME"'/uav_manager/takeoff'
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'

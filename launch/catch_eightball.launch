@@ -18,24 +18,24 @@
   <arg if="$(eval arg('WORLD_FILE') != '')" name="world_file" value="$(arg WORLD_FILE)" />
 
   <group if="$(arg print_debug)">
-    <env name="ROSCONSOLE_CONFIG_FILE" value="$(find balloon_planner)/config/rosconsole/debug.conf"/>
+    <env name="ROSCONSOLE_CONFIG_FILE" value="$(find ball_planner)/config/rosconsole/debug.conf"/>
   </group>
 
   <group ns="$(arg uav_name)">
 
-    <node pkg="nodelet" type="nodelet" name="balloon_planner" args="standalone balloon_planner/BalloonPlanner" output="screen" launch-prefix="$(arg launch_prefix)" >
+    <node pkg="nodelet" type="nodelet" name="ball_planner" args="standalone ball_planner/BallPlanner" output="screen" launch-prefix="$(arg launch_prefix)" >
 
       <param name="uav_name" type="string" value="$(arg uav_name)" />
       <param name="uav_frame_id" type="string" value="$(arg uav_name)/fcu" />
       <param name="world_frame_id" type="string" value="$(arg uav_name)/gps_origin" />
       <param name="arena_frame_id" type="string" value="$(arg uav_name)/gps_origin" />
-      <rosparam file="$(find balloon_planner)/config/plan_params.yaml" command="load" />
+      <rosparam file="$(find ball_planner)/config/plan_params.yaml" command="load" />
       <rosparam file="$(arg world_file)" command="load" />
 
       <!-- Subscribers -->
       <!-- <remap from="~ball_detection" to="uav_detection/detection$(arg suf)" /> -->
-      <!-- <remap from="~ball_prediction" to="balloon_filter/prediction$(arg suf)" /> -->
-      <!-- <remap from="~ball_passthrough" to="balloon_filter/line_endpose$(arg suf)" /> -->
+      <!-- <remap from="~ball_prediction" to="ball_filter/prediction$(arg suf)" /> -->
+      <!-- <remap from="~ball_passthrough" to="ball_filter/line_endpose$(arg suf)" /> -->
       <remap from="~cmd_odom" to="control_manager/cmd_odom" />
       <remap from="~main_odom" to="odometry/odom_main" />
       <remap from="~tracker_diagnostics" to="control_manager/mpc_tracker/diagnostics" />
@@ -51,7 +51,7 @@
       <remap from="~intersection_point" to="~intersection_point$(arg suf)" />
 
       <!-- Services -->
-      <remap from="~reset_balloon_filter" to="balloon_filter/reset_estimates" />
+      <remap from="~reset_ball_filter" to="ball_filter/reset_estimates" />
       <remap from="~reset_detector" to="uav_detection/reset" />
       <remap from="~set_constraints" to="constraint_manager/set_constraints" />
       <remap from="~land_there" to="uav_manager/land_there" />

@@ -23,9 +23,9 @@ pre_input="export UAV_NAME=uav1; export RUN_TYPE=simulation; export UAV_TYPE=t65
 # define commands
 # 'name' 'command'
 input=(
-  'Gazebo' "waitForRos; roslaunch balloon_simulation simulation.launch gui:=false
+  'Gazebo' "waitForRos; roslaunch ball_simulation simulation.launch gui:=false
 "
-  'Balloon Attacher' "waitForRos; roslaunch balloon_attacher attacher.launch
+  'Ball Attacher' "waitForRos; roslaunch ball_attacher attacher.launch
 "
   'Spawn UAV1' "export UAV_NAME=uav1; waitForSimulation; spawn 1 --run --delete --enable-rangefinder --enable-ground-truth --enable-realsense-front
 "
@@ -41,16 +41,16 @@ input=(
 rosservice call /uav2/control_manager/goto \"goal: [3.0, 3.0, 5.0, 0.6]\"
 "
   'Trajectory' "waitForControl;
-roslaunch balloon_filter generate_eight.launch;
+roslaunch ball_filter generate_eight.launch;
 roslaunch trajectory_loader multimaster_trajectories_loader.launch loop:=true;
 sleep 15;
 roslaunch trajectory_loader multimaster_start_following.launch;
 "
   'Detector' "waitForControl; roslaunch object_detect object_detect.launch
 "
-  'Filter' "waitForControl; roslaunch balloon_filter filter_eightball.launch
+  'Filter' "waitForControl; roslaunch ball_filter filter_eightball.launch
 "
-  'Planner' "waitForControl; roslaunch balloon_planner catch_eightball.launch
+  'Planner' "waitForControl; roslaunch ball_planner catch_eightball.launch
 "
   'GoTo' "rosservice call /$UAV_NAME/control_manager/goto \"goal: [15.0, 15.0, 2.0, 0.0]\""
   'GoToRelative' "rosservice call /$UAV_NAME/control_manager/goto_relative \"goal: [5.0, 5.0, 1.0, 3.14]\""

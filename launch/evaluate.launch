@@ -6,8 +6,8 @@
   <arg unless="$(arg debug)" name="launch_prefix" value=""/>
   <arg     if="$(arg debug)" name="launch_prefix" value="pdb"/>
 
-  <node name="localization_evaluation" pkg="balloon_planner" type="evaluate.py" output="screen" launch-prefix="$(arg launch_prefix)">
-    <param name="out_fname" value="$(find balloon_planner)/output/loc_out.csv" />
+  <node name="localization_evaluation" pkg="ball_planner" type="evaluate.py" output="screen" launch-prefix="$(arg launch_prefix)">
+    <param name="out_fname" value="$(find ball_planner)/output/loc_out.csv" />
   </node>
 
 </launch>

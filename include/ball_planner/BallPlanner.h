@@ -37,7 +37,8 @@
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/subscribe_handler.h>
 #include <mrs_lib/dynamic_reconfigure_mgr.h>
-#include <mrs_lib/geometry_utils.h>
+#include <mrs_lib/geometry/misc.h>
+#include <mrs_lib/utils.h>
 
 // Boost
 #include <boost/circular_buffer.hpp>
@@ -47,20 +48,19 @@
 #include <mutex>
 
 // local includes
-#include <balloon_filter/BallLocation.h>
-#include <balloon_filter/BallPrediction.h>
-#include <balloon_planner/PlanningParamsConfig.h>
-#include <balloon_filter/ResetEstimates.h>
+#include <ball_filter/BallLocation.h>
+#include <ball_filter/BallPrediction.h>
+#include <ball_planner/PlanningParamsConfig.h>
 #include <mrs_msgs/TrajectoryReference.h>
 
 //}
 
 #define MSG_THROTTLE 0.5
 
-namespace balloon_planner
+namespace ball_planner
 {
   // shortcut type to the dynamic reconfigure manager template instance
-  using drcfg_t = balloon_planner::PlanningParamsConfig;
+  using drcfg_t = ball_planner::PlanningParamsConfig;
   using drmgr_t = mrs_lib::DynamicReconfigureMgr<drcfg_t>;
 
   using vec2_t = Eigen::Vector2d;
@@ -143,12 +143,12 @@ namespace balloon_planner
     ros::Time stamp;
   };
 
-  /* //{ class BalloonPlanner */
+  /* //{ class BallPlanner */
 
-  class BalloonPlanner : public nodelet::Nodelet
+  class BallPlanner : public nodelet::Nodelet
   {
     public:
-      BalloonPlanner() : m_node_name("BalloonPlanner"), m_initialized(false), m_activated(false) {};
+      BallPlanner() : m_node_name("BallPlanner"), m_initialized(false), m_activated(false) {};
       virtual void onInit();
 
       bool m_is_initialized;
@@ -208,7 +208,7 @@ namespace balloon_planner
       std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
       mrs_lib::SubscribeHandler<geometry_msgs::PoseWithCovarianceStamped> m_sh_ball_detection;
       mrs_lib::SubscribeHandler<geometry_msgs::PoseStamped> m_sh_ball_passthrough;
-      mrs_lib::SubscribeHandler<balloon_filter::BallPrediction> m_sh_ball_prediction;
+      mrs_lib::SubscribeHandler<ball_filter::BallPrediction> m_sh_ball_prediction;
       mrs_lib::SubscribeHandler<nav_msgs::Odometry> m_sh_cmd_odom;
       mrs_lib::SubscribeHandler<nav_msgs::Odometry> m_sh_main_odom;
       mrs_lib::SubscribeHandler<mrs_msgs::MpcTrackerDiagnostics> m_sh_tracker_diags;
@@ -295,7 +295,7 @@ namespace balloon_planner
       std::optional<pose_stamped_t> get_ball_passthrough();
       std::optional<vec4_t> get_uav_position();
       std::optional<vec4_t> get_uav_cmd_position();
-      std::optional<balloon_filter::BallPrediction> get_ball_prediction();
+      std::optional<ball_filter::BallPrediction> get_ball_prediction();
 
       vec4_t choose_lurking_pose(const std::vector<pose_stamped_t>& ball_positions);
       plane_t get_yz_plane(const vec4_t& pose);
@@ -335,6 +335,6 @@ namespace balloon_planner
   
   //}
 
-}  // namespace balloon_planner
+}  // namespace ball_planner
 
 #endif

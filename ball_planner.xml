@@ -1,0 +1,5 @@
+<library path="lib/libBallPlanner">
+  <class name="ball_planner/BallPlanner" type="ball_planner::BallPlanner" base_class_type="nodelet::Nodelet">
+    <description>The ball_planner nodelet</description>
+  </class>
+</library>

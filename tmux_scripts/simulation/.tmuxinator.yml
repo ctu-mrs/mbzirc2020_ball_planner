@@ -11,8 +11,8 @@ windows:
   - gazebo:
       layout: even-vertical
       panes:
-        - waitForRos; roslaunch balloon_simulation simulation.launch
-        - waitForRos; roslaunch balloon_attacher attacher.launch
+        - waitForRos; roslaunch ball_simulation simulation.launch
+        - waitForRos; roslaunch ball_attacher attacher.launch
   - spawn:
       layout: even-vertical
       panes:
@@ -36,7 +36,7 @@ windows:
           rosservice call /$UAV_NAME/uav_manager/takeoff;
           sleep 8;
           rosservice call /$UAV_NAME/control_manager/goto "goal: [0.0, -20.0, 12.0, 1.57]";
-          roslaunch balloon_simulation publish_ground_truth_tf.launch'
+          roslaunch ball_simulation publish_ground_truth_tf.launch'
         #}
         #{ uav2
         - '
@@ -48,7 +48,7 @@ windows:
           rosservice call /$UAV_NAME/uav_manager/takeoff;
           sleep 8;
           rosservice call /$UAV_NAME/control_manager/goto "goal: [3.0, 3.0, 4.0, 0.6]";
-          roslaunch balloon_simulation publish_ground_truth_tf.launch'
+          roslaunch ball_simulation publish_ground_truth_tf.launch'
         #}
   - goto:
       layout: even-vertical
@@ -56,15 +56,15 @@ windows:
         - '
           export UAV_NAME=uav60;
           waitForControl;
-          roslaunch balloon_filter generate_eight.launch;
-          roslaunch balloon_filter load_eight.launch loop:=true;
+          roslaunch ball_filter generate_eight.launch;
+          roslaunch ball_filter load_eight.launch loop:=true;
           sleep 15;
-          roslaunch balloon_filter start_following_eight.launch;
+          roslaunch ball_filter start_following_eight.launch;
           '
   # - tf_connector:
   #     layout: even-vertical
   #     panes:
-  #       - roslaunch balloon_filter tf_connector.launch
+  #       - roslaunch ball_filter tf_connector.launch
   - detector:
       layout: even-vertical
       panes:
@@ -72,12 +72,12 @@ windows:
   - filter:
       layout: even-vertical
       panes:
-        - waitForControl; roslaunch balloon_filter filter_eightball.launch
+        - waitForControl; roslaunch ball_filter filter_eightball.launch
   - planner:
       layout: even-vertical
       panes:
-        - waitForControl; roslaunch balloon_planner catch_eightball.launch
-        - 'waitForControl; sleep 5; rosservice call /uav62/balloon_planner/start_state_machine "value: 0"'
+        - waitForControl; roslaunch ball_planner catch_eightball.launch
+        - 'waitForControl; sleep 5; rosservice call /uav62/ball_planner/start_state_machine "value: 0"'
   - mrs_status:
       layout: even-vertical
       panes:

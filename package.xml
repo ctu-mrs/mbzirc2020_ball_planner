@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
 
-  <name>balloon_planner</name>
+  <name>ball_planner</name>
   <version>1.0.0</version>
-  <description>The balloon_planner package</description>
+  <description>The ball_planner package</description>
 
   <author email="vrbamato@fel.cvut.cz">Matouš Vrba</author>
   <maintainer email="vrbamato@fel.cvut.cz">Matouš Vrba</maintainer>
@@ -18,13 +18,13 @@
   <depend>roscpp</depend>
   <depend>std_msgs</depend>
   <depend>mrs_msgs</depend>
-  <depend>balloon_filter</depend>
+  <depend>ball_filter</depend>
   <depend>nodelet</depend>
 
   <build_depend>message_generation</build_depend>
 
   <export>
-    <nodelet plugin="${prefix}/balloon_planner.xml" />
+    <nodelet plugin="${prefix}/ball_planner.xml" />
   </export>
 
 </package>

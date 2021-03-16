@@ -23,7 +23,7 @@ pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME; export WOR
 # define commands
 # 'name' 'command'
 input=(
-  'Rosbag' 'waitForOffboard; rosrun balloon_planner record.sh
+  'Rosbag' 'waitForOffboard; rosrun ball_planner record.sh
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '

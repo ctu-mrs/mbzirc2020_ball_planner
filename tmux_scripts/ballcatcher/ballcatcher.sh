@@ -23,7 +23,7 @@ pre_input="export ATHAME_ENABLED=0; mkdir -p $MAIN_DIR/$PROJECT_NAME;"
 # define commands
 # 'name' 'command'
 input=(
-  'Rosbag' 'waitForOffboard; rosrun balloon_planner record.sh
+  'Rosbag' 'waitForOffboard; rosrun ball_planner record.sh
 '
   'Sensors' 'waitForRos; roslaunch mrs_general sensors.launch
 '
@@ -33,13 +33,13 @@ input=(
 '
   'Nimbro' 'waitForRos; roslaunch mrs_general nimbro.launch custom_config:=./custom_configs/nimbro.yaml
 '
-  'Detection' 'waitForControl; roslaunch balloon_planner detection_pipeline.launch;
+  'Detection' 'waitForControl; roslaunch ball_planner detection_pipeline.launch;
 '
-  'Filtering' 'waitForControl; roslaunch balloon_filter filter_eightball.launch;
+  'Filtering' 'waitForControl; roslaunch ball_filter filter_eightball.launch;
 '
-  'Planning' 'waitForControl; roslaunch balloon_planner catch_eightball.launch;
+  'Planning' 'waitForControl; roslaunch ball_planner catch_eightball.launch;
 '
-  'Service' 'rosservice call /'"$UAV_NAME"'/balloon_planner/land'
+  'Service' 'rosservice call /'"$UAV_NAME"'/ball_planner/land'
   'AutoStart' 'waitForRos; roslaunch mrs_general automatic_start_mbzirc.launch challenge:=ball
 '
   'ChangeEstimator' 'waitForOdometry; rosservice call /'"$UAV_NAME"'/odometry/change_estimator_type_string T265'

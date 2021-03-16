@@ -1,6 +1,6 @@
-#include <balloon_planner/BalloonPlanner.h>
+#include <ball_planner/BallPlanner.h>
 
-namespace balloon_planner
+namespace ball_planner
 {
 
   /* to_eigen() method //{ */
@@ -48,7 +48,7 @@ namespace balloon_planner
   //}
 
   /* main_loop() method //{ */
-  void BalloonPlanner::main_loop([[maybe_unused]] const ros::TimerEvent& evt)
+  void BallPlanner::main_loop([[maybe_unused]] const ros::TimerEvent& evt)
   {
     load_dynparams(m_drmgr_ptr->config);
 
@@ -565,7 +565,7 @@ namespace balloon_planner
               is_behind_yzplane = true;
             if (ball_dist < m_lurking_passthrough_dist)
             {
-              if (m_prev_signed_ball_dist_set && mrs_lib::sign(signed_ball_dist) != mrs_lib::sign(m_prev_signed_ball_dist))
+              if (m_prev_signed_ball_dist_set && mrs_lib::signum(signed_ball_dist) != mrs_lib::signum(m_prev_signed_ball_dist))
               {
                 ROS_ERROR("[LURKING]: BALL PASSTHROUGH DETECTED!!");
                 if (m_lurking_land_check)
@@ -639,7 +639,7 @@ namespace balloon_planner
   //}
 
   /* delayed_init() method //{ */
-  void BalloonPlanner::delayed_init([[maybe_unused]] const ros::TimerEvent& evt)
+  void BallPlanner::delayed_init([[maybe_unused]] const ros::TimerEvent& evt)
   {
 
     /* transform drop zone  //{ */
@@ -668,7 +668,7 @@ namespace balloon_planner
   // --------------------------------------------------------------
 
   /* pick_constraints() method //{ */
-  /* std::string BalloonPlanner::pick_constraints(const double ball_dist) */
+  /* std::string BallPlanner::pick_constraints(const double ball_dist) */
   /* { */
   /*   assert(!m_constraint_ranges.empty()); */
   /*   auto prev_constraint = std::begin(m_constraint_ranges)->second; */
@@ -681,7 +681,7 @@ namespace balloon_planner
   /*   return prev_constraint; */
   /* } */
 
-  std::string BalloonPlanner::pick_constraints(const state_t state)
+  std::string BallPlanner::pick_constraints(const state_t state)
   {
     const auto state_name = to_string(state);
     if (!m_constraint_states.count(state_name))
@@ -696,7 +696,7 @@ namespace balloon_planner
   //}
 
   /* set_constraints() method //{ */
-  void BalloonPlanner::set_constraints(const std::string& constraints_name)
+  void BallPlanner::set_constraints(const std::string& constraints_name)
   {
     mrs_msgs::String::Request req;
     mrs_msgs::String::Response res;
@@ -709,7 +709,7 @@ namespace balloon_planner
   //}
 
   /* reset_detector() method //{ */
-  void BalloonPlanner::reset_detector()
+  void BallPlanner::reset_detector()
   {
     std_srvs::Trigger::Request req;
     std_srvs::Trigger::Response res;
@@ -721,7 +721,7 @@ namespace balloon_planner
   //}
 
   /* reset_filter() method //{ */
-  void BalloonPlanner::reset_filter()
+  void BallPlanner::reset_filter()
   {
     std_srvs::Trigger::Request req;
     std_srvs::Trigger::Response res;
@@ -733,7 +733,7 @@ namespace balloon_planner
   //}
 
   /* land_there() method //{ */
-  bool BalloonPlanner::land_there(const vec4_t& landing_pose)
+  bool BallPlanner::land_there(const vec4_t& landing_pose)
   {
     mrs_msgs::ReferenceStampedSrv::Request req;
     req.header.frame_id = m_world_frame_id;
@@ -752,7 +752,7 @@ namespace balloon_planner
   //}
 
   /* call_check_ball() method //{ */
-  void BalloonPlanner::call_check_ball()
+  void BallPlanner::call_check_ball()
   {
     std_srvs::Trigger::Request req;
     std_srvs::Trigger::Response res;
@@ -764,7 +764,7 @@ namespace balloon_planner
   //}
 
   /* get_yz_plane() method //{ */
-  plane_t BalloonPlanner::get_yz_plane(const vec4_t& pose)
+  plane_t BallPlanner::get_yz_plane(const vec4_t& pose)
   {
     const vec3_t normal(cos(pose.w()), sin(pose.w()), 0.0);
     plane_t ret;
@@ -776,7 +776,7 @@ namespace balloon_planner
 
   /* signed_point_plane_distance() method //{ */
   // returns +distance if the point is IN FRONT of the plane, -distance if the point is BEHIND the plane
-  double BalloonPlanner::signed_point_plane_distance(const vec3_t& point, const plane_t& plane)
+  double BallPlanner::signed_point_plane_distance(const vec3_t& point, const plane_t& plane)
   {
     return (point - plane.point).dot(plane.normal.normalized());
   }
@@ -801,7 +801,7 @@ namespace balloon_planner
   //}
 
   /* path_plane_intersection() method //{ */
-  std::optional<vec3_t> BalloonPlanner::path_plane_intersection(const path_t& path, const plane_t& plane)
+  std::optional<vec3_t> BallPlanner::path_plane_intersection(const path_t& path, const plane_t& plane)
   {
     assert(path.poses.size() > 1);
     std::optional<vec3_t> intersection;
@@ -833,7 +833,7 @@ namespace balloon_planner
   //}
 
   /* load_dynparams() method //{ */
-  void BalloonPlanner::load_dynparams(drcfg_t cfg)
+  void BallPlanner::load_dynparams(drcfg_t cfg)
   {
     m_lurking_min_observing_dur = ros::Duration(cfg.lurking__min_observing_duration);
     m_lurking_min_last_pts = cfg.lurking__min_last_points;
@@ -847,7 +847,7 @@ namespace balloon_planner
   //}
 
   /* calc_offset_vector() method //{ */
-  vec3_t BalloonPlanner::calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance)
+  vec3_t BallPlanner::calc_horizontal_offset_vector(const vec3_t& dir_vec, const double tolerance)
   {
     vec3_t ret(dir_vec.x(), dir_vec.y(), 0.0);
     if (ret.norm() < tolerance)
@@ -859,7 +859,7 @@ namespace balloon_planner
   //}
 
   /* get_transform_raw() method //{ */
-  std::optional<geometry_msgs::TransformStamped> BalloonPlanner::get_transform_raw(const std::string& from_frame_id, const std::string& to_frame_id,
+  std::optional<geometry_msgs::TransformStamped> BallPlanner::get_transform_raw(const std::string& from_frame_id, const std::string& to_frame_id,
                                                                                    ros::Time stamp)
   {
     try
@@ -877,7 +877,7 @@ namespace balloon_planner
   //}
 
   /* get_transform() method //{ */
-  std::optional<Eigen::Affine3d> BalloonPlanner::get_transform(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp)
+  std::optional<Eigen::Affine3d> BallPlanner::get_transform(const std::string& from_frame_id, const std::string& to_frame_id, ros::Time stamp)
   {
     const auto tf_opt = get_transform_raw(from_frame_id, to_frame_id, stamp);
     if (tf_opt.has_value())
@@ -888,14 +888,14 @@ namespace balloon_planner
   //}
 
   /* get_transform_to_world() method //{ */
-  std::optional<Eigen::Affine3d> BalloonPlanner::get_transform_to_world(const std::string& frame_id, ros::Time stamp)
+  std::optional<Eigen::Affine3d> BallPlanner::get_transform_to_world(const std::string& frame_id, ros::Time stamp)
   {
     return get_transform(frame_id, m_world_frame_id, stamp);
   }
   //}
 
   /* process_detection() method //{ */
-  std::optional<pose_stamped_t> BalloonPlanner::process_detection(const geometry_msgs::PoseWithCovarianceStamped& det)
+  std::optional<pose_stamped_t> BallPlanner::process_detection(const geometry_msgs::PoseWithCovarianceStamped& det)
   {
     const auto tf_opt = get_transform_to_world(det.header.frame_id, det.header.stamp);
     if (!tf_opt.has_value())
@@ -914,7 +914,7 @@ namespace balloon_planner
   //}
 
   /* process_detection() method //{ */
-  std::optional<pose_stamped_t> BalloonPlanner::process_detection(const geometry_msgs::PoseStamped& det)
+  std::optional<pose_stamped_t> BallPlanner::process_detection(const geometry_msgs::PoseStamped& det)
   {
     const auto tf_opt = get_transform_to_world(det.header.frame_id, det.header.stamp);
     if (!tf_opt.has_value())
@@ -933,7 +933,7 @@ namespace balloon_planner
   //}
 
   /* process_odom() method //{ */
-  std::optional<vec4_t> BalloonPlanner::process_odom(const nav_msgs::Odometry& odom)
+  std::optional<vec4_t> BallPlanner::process_odom(const nav_msgs::Odometry& odom)
   {
     const auto tf_opt = get_transform_to_world(odom.header.frame_id, odom.header.stamp);
     if (!tf_opt.has_value())
@@ -949,7 +949,7 @@ namespace balloon_planner
   //}
 
   /* get_ball_prediction() method //{ */
-  std::optional<balloon_filter::BallPrediction> BalloonPlanner::get_ball_prediction()
+  std::optional<ball_filter::BallPrediction> BallPlanner::get_ball_prediction()
   {
     if (!m_sh_ball_prediction.newMsg())
       return std::nullopt;
@@ -959,7 +959,7 @@ namespace balloon_planner
     const auto age = ros::Time::now() - ret.header.stamp;
     if (age > m_max_unseen_dur)
     {
-      ROS_WARN_THROTTLE(1.0, "[BalloonPlanner]: Received prediction is too old, ignoring it (age: %.2f > %.2f)", age.toSec(), m_max_unseen_dur.toSec());
+      ROS_WARN_THROTTLE(1.0, "[BallPlanner]: Received prediction is too old, ignoring it (age: %.2f > %.2f)", age.toSec(), m_max_unseen_dur.toSec());
       return std::nullopt;
     }
 
@@ -975,7 +975,7 @@ namespace balloon_planner
   //}
 
   /* get_ball_position() method //{ */
-  std::optional<pose_stamped_t> BalloonPlanner::get_ball_position()
+  std::optional<pose_stamped_t> BallPlanner::get_ball_position()
   {
     if (!m_sh_ball_detection.hasMsg())
       return std::nullopt;
@@ -985,7 +985,7 @@ namespace balloon_planner
     const auto age = ros::Time::now() - det.header.stamp;
     if (age > m_max_unseen_dur)
     {
-      ROS_WARN_THROTTLE(1.0, "[BalloonPlanner]: Received detection is too old, ignoring it (age: %.2f > %.2f)", age.toSec(), m_max_unseen_dur.toSec());
+      ROS_WARN_THROTTLE(1.0, "[BallPlanner]: Received detection is too old, ignoring it (age: %.2f > %.2f)", age.toSec(), m_max_unseen_dur.toSec());
       return std::nullopt;
     }
     return process_detection(det);
@@ -993,7 +993,7 @@ namespace balloon_planner
   //}
 
   /* get_ball_passthrough() method //{ */
-  std::optional<pose_stamped_t> BalloonPlanner::get_ball_passthrough()
+  std::optional<pose_stamped_t> BallPlanner::get_ball_passthrough()
   {
     if (!m_sh_ball_passthrough.hasMsg())
       return std::nullopt;
@@ -1003,7 +1003,7 @@ namespace balloon_planner
   //}
 
   /* get_uav_position() method //{ */
-  std::optional<vec4_t> BalloonPlanner::get_uav_position()
+  std::optional<vec4_t> BallPlanner::get_uav_position()
   {
     if (!m_sh_main_odom.hasMsg())
       return std::nullopt;
@@ -1013,7 +1013,7 @@ namespace balloon_planner
   //}
 
   /* get_uav_cmd_position() method //{ */
-  std::optional<vec4_t> BalloonPlanner::get_uav_cmd_position()
+  std::optional<vec4_t> BallPlanner::get_uav_cmd_position()
   {
     if (!m_sh_cmd_odom.hasMsg())
       return std::nullopt;
@@ -1023,7 +1023,7 @@ namespace balloon_planner
   //}
 
   /* offset_path() method //{ */
-  path_t BalloonPlanner::offset_path(const path_t& path, const vec3_t& off_vec)
+  path_t BallPlanner::offset_path(const path_t& path, const vec3_t& off_vec)
   {
     path_t ret = path;
     for (auto& pose : ret.poses)
@@ -1081,7 +1081,7 @@ namespace balloon_planner
   //}
 
   /* trajectory_duration() method //{ */
-  ros::Duration BalloonPlanner::trajectory_duration(const int n_traj_pts, const double dt)
+  ros::Duration BallPlanner::trajectory_duration(const int n_traj_pts, const double dt)
   {
     const ros::Duration traj_dur(n_traj_pts > 0 ? (n_traj_pts - 1) * dt : 0);
     return traj_dur;
@@ -1089,7 +1089,7 @@ namespace balloon_planner
   //}
 
   /* sample_trajectory_between_pts() method //{ */
-  traj_t BalloonPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw,
+  traj_t BallPlanner::sample_trajectory_between_pts(const vec3_t& from_pt, const vec3_t& to_pt, const double speed, const double dt, const double yaw,
                                                        const std_msgs::Header& header)
   {
     assert(speed > 0.0);
@@ -1119,7 +1119,7 @@ namespace balloon_planner
   //}
 
   /* sample_trajectory_from_path() method //{ */
-  traj_t BalloonPlanner::sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts,
+  traj_t BallPlanner::sample_trajectory_from_path(const path_t& path, const double dt, const double speed, const size_t n_pts,
                                                      const std_msgs::Header& header)
   {
     assert(!path.poses.empty());
@@ -1140,7 +1140,7 @@ namespace balloon_planner
       {
         if (prev_pose_it >= (int)path.poses.size() - 2)
         {
-          ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
+          ROS_WARN_STREAM_THROTTLE(1.0, "[BallPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
           break;
         }
 
@@ -1165,7 +1165,7 @@ namespace balloon_planner
   //}
 
   /* sample_trajectory_from_path() method //{ */
-  traj_t BalloonPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
+  traj_t BallPlanner::sample_trajectory_from_path(const ros::Time& start_stamp, const path_t& path, const double dt, const size_t n_pts)
   {
     assert(!path.poses.empty());
     /* const size_t n_pts = std::min(m_max_pts, size_t(std::floor(dur.toSec() / dt))); */
@@ -1185,7 +1185,7 @@ namespace balloon_planner
       {
         if (prev_pose_it >= (int)path.poses.size() - 2)
         {
-          ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
+          ROS_WARN_STREAM_THROTTLE(1.0, "[BallPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
           break;
         }
 
@@ -1207,7 +1207,7 @@ namespace balloon_planner
   //}
 
   /* join_trajectories() method //{ */
-  traj_t BalloonPlanner::join_trajectories(const traj_t& traj1, const traj_t& traj2)
+  traj_t BallPlanner::join_trajectories(const traj_t& traj1, const traj_t& traj2)
   {
     traj_t ret;
     ret.header = traj1.header;
@@ -1218,7 +1218,7 @@ namespace balloon_planner
   //}
 
   /* limit_cmd_vec_speed() method //{ */
-  vec3_t BalloonPlanner::limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts)
+  vec3_t BallPlanner::limit_cmd_vec_speed(const vec3_t& cmd_vector, const vec3_t& max_speed, const double dt, size_t max_pts)
   {
     assert(dt > 0.0);
     const vec3_t max_traj_dvec = max_speed * dt;
@@ -1242,7 +1242,7 @@ namespace balloon_planner
   //}
 
   /* orient_trajectory_yaw() method //{ */
-  traj_t BalloonPlanner::orient_trajectory_yaw(const traj_t& traj, const vec3_t& to_point)
+  traj_t BallPlanner::orient_trajectory_yaw(const traj_t& traj, const vec3_t& to_point)
   {
     traj_t ret = traj;
     ret.points.clear();
@@ -1262,7 +1262,7 @@ namespace balloon_planner
   //}
 
   /* orient_trajectory_yaw_observe() method //{ */
-  traj_t BalloonPlanner::orient_trajectory_yaw_observe(const traj_t& traj, const path_t& to_path)
+  traj_t BallPlanner::orient_trajectory_yaw_observe(const traj_t& traj, const path_t& to_path)
   {
     traj_t ret = traj;
     ret.points.clear();
@@ -1279,7 +1279,7 @@ namespace balloon_planner
       {
         if (prev_pose_it >= (int)to_path.poses.size() - 2)
         {
-          ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
+          ROS_WARN_STREAM_THROTTLE(1.0, "[BallPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
           break;
         }
 
@@ -1304,7 +1304,7 @@ namespace balloon_planner
   //}
 
   /* orient_trajectory_yaw_speed() method //{ */
-  traj_t BalloonPlanner::orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path)
+  traj_t BallPlanner::orient_trajectory_yaw_speed(const traj_t& traj, const path_t& to_path)
   {
     traj_t ret = traj;
     ret.points.clear();
@@ -1321,7 +1321,7 @@ namespace balloon_planner
       {
         if (prev_pose_it >= (int)to_path.poses.size() - 2)
         {
-          ROS_WARN_STREAM_THROTTLE(1.0, "[BalloonPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
+          ROS_WARN_STREAM_THROTTLE(1.0, "[BallPlanner]: Newest path point is older than current time, consider increasing the sampling horizon.");
           break;
         }
 
@@ -1343,7 +1343,7 @@ namespace balloon_planner
   //}
 
   /* traj_to_path() method //{ */
-  path_t BalloonPlanner::traj_to_path(const traj_t& traj, const double traj_dt)
+  path_t BallPlanner::traj_to_path(const traj_t& traj, const double traj_dt)
   {
     path_t ret;
     ret.header = traj.header;
@@ -1376,7 +1376,7 @@ namespace balloon_planner
   //}
 
   /* path_to_traj() method //{ */
-  traj_t BalloonPlanner::path_to_traj(const path_t& path)
+  traj_t BallPlanner::path_to_traj(const path_t& path)
   {
     traj_t ret;
     ret.header = path.header;
@@ -1394,7 +1394,7 @@ namespace balloon_planner
   //}
 
   /* point_to_traj() method //{ */
-  traj_t BalloonPlanner::point_to_traj(const vec3_t& point, const size_t n_pts)
+  traj_t BallPlanner::point_to_traj(const vec3_t& point, const size_t n_pts)
   {
     traj_t ret;
     ret.points.reserve(n_pts);
@@ -1412,7 +1412,7 @@ namespace balloon_planner
   /* methods //{ */
 
   /* to_output_message() method //{ */
-  sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<pose_stamped_t>& points, const std_msgs::Header& header)
+  sensor_msgs::PointCloud2 BallPlanner::to_output_message(const std::vector<pose_stamped_t>& points, const std_msgs::Header& header)
   {
     const size_t n_pts = points.size();
     sensor_msgs::PointCloud2 ret;
@@ -1445,7 +1445,7 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  geometry_msgs::PoseStamped BalloonPlanner::to_output_message(const vec4_t& position, const std_msgs::Header& header)
+  geometry_msgs::PoseStamped BallPlanner::to_output_message(const vec4_t& position, const std_msgs::Header& header)
   {
     geometry_msgs::PoseStamped ret;
     ret.header = header;
@@ -1456,7 +1456,7 @@ namespace balloon_planner
 
     const double yaw = position.w();
     const vec3_t heading_vec(std::cos(yaw), std::sin(yaw), 0);
-    const quat_t quat = mrs_lib::quaternion_between(mrs_lib::vec3_t(1.0, 0.0, 0.0), heading_vec);
+    const quat_t quat = mrs_lib::geometry::quaternionBetween(vec3_t(1.0, 0.0, 0.0), heading_vec);
 
     ret.pose.orientation.x = quat.x();
     ret.pose.orientation.y = quat.y();
@@ -1468,7 +1468,7 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  visualization_msgs::Marker BalloonPlanner::to_output_message(const cv::Vec6f& line, const std_msgs::Header& header)
+  visualization_msgs::Marker BallPlanner::to_output_message(const cv::Vec6f& line, const std_msgs::Header& header)
   {
     visualization_msgs::Marker ret;
     ret.header = header;
@@ -1495,7 +1495,7 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  sensor_msgs::PointCloud2 BalloonPlanner::to_output_message(const std::vector<cv::Point3d>& points, const std_msgs::Header& header)
+  sensor_msgs::PointCloud2 BallPlanner::to_output_message(const std::vector<cv::Point3d>& points, const std_msgs::Header& header)
   {
     const size_t n_pts = points.size();
     sensor_msgs::PointCloud2 ret;
@@ -1528,7 +1528,7 @@ namespace balloon_planner
   //}
 
   /* to_output_message() method //{ */
-  geometry_msgs::PointStamped BalloonPlanner::to_msg(const vec3_t& point, const std_msgs::Header& header)
+  geometry_msgs::PointStamped BallPlanner::to_msg(const vec3_t& point, const std_msgs::Header& header)
   {
     geometry_msgs::PointStamped ret;
     ret.header = header;
@@ -1540,7 +1540,7 @@ namespace balloon_planner
   //}
 
   /* plane_visualization //{ */
-  visualization_msgs::MarkerArray BalloonPlanner::plane_visualization(const plane_t& plane, const std_msgs::Header& header)
+  visualization_msgs::MarkerArray BallPlanner::plane_visualization(const plane_t& plane, const std_msgs::Header& header)
   {
     visualization_msgs::MarkerArray ret;
 
@@ -1657,7 +1657,7 @@ namespace balloon_planner
   // | -------------------------- OTHER ------------------------- |
   /* onInit() //{ */
 
-  void BalloonPlanner::onInit()
+  void BallPlanner::onInit()
   {
 
     ROS_INFO("[%s]: Initializing", m_node_name.c_str());
@@ -1747,9 +1747,9 @@ namespace balloon_planner
     mrs_lib::construct_object(m_sh_main_odom, shopts, "main_odom");
     mrs_lib::construct_object(m_sh_tracker_diags, shopts, "tracker_diagnostics");
 
-    m_srv_start = nh.advertiseService("start_state_machine", &BalloonPlanner::start_callback, this);
-    m_srv_stop = nh.advertiseService("stop_state_machine", &BalloonPlanner::stop_callback, this);
-    m_srv_land = nh.advertiseService("land", &BalloonPlanner::land_callback, this);
+    m_srv_start = nh.advertiseService("start_state_machine", &BallPlanner::start_callback, this);
+    m_srv_stop = nh.advertiseService("stop_state_machine", &BallPlanner::stop_callback, this);
+    m_srv_land = nh.advertiseService("land", &BallPlanner::land_callback, this);
 
     //}
 
@@ -1770,7 +1770,7 @@ namespace balloon_planner
     /* services //{ */
 
     m_srv_reset_detector = nh.serviceClient<std_srvs::Trigger>("reset_detector");
-    m_srv_reset_filter = nh.serviceClient<std_srvs::Trigger>("reset_balloon_filter");
+    m_srv_reset_filter = nh.serviceClient<std_srvs::Trigger>("reset_ball_filter");
     m_srv_set_constraints = nh.serviceClient<mrs_msgs::String>("set_constraints");
     m_srv_land_there = nh.serviceClient<mrs_msgs::ReferenceStampedSrv>("land_there");
     m_srv_ball_check = nh.serviceClient<std_srvs::Trigger>("ball_check");
@@ -1779,8 +1779,8 @@ namespace balloon_planner
 
     /* timers  //{ */
 
-    m_main_loop_timer = nh.createTimer(ros::Duration(planning_period), &BalloonPlanner::main_loop, this);
-    m_delayed_init_timer = nh.createTimer(ros::Duration(1.0), &BalloonPlanner::delayed_init, this);
+    m_main_loop_timer = nh.createTimer(ros::Duration(planning_period), &BallPlanner::main_loop, this);
+    m_delayed_init_timer = nh.createTimer(ros::Duration(1.0), &BallPlanner::delayed_init, this);
 
     //}
 
@@ -1794,9 +1794,9 @@ namespace balloon_planner
 
   //}
 
-  /* BalloonPlanner::start_callback() method //{ */
+  /* BallPlanner::start_callback() method //{ */
 
-  bool BalloonPlanner::start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp)
+  bool BallPlanner::start_callback(mrs_msgs::SetInt::Request& req, mrs_msgs::SetInt::Response& resp)
   {
     if (m_activated)
       resp.message = "State machine already active! Got '" + std::to_string(req.value) + "'.";
@@ -1817,9 +1817,9 @@ namespace balloon_planner
 
   //}
 
-  /* BalloonPlanner::stop_callback() method //{ */
+  /* BallPlanner::stop_callback() method //{ */
 
-  bool BalloonPlanner::stop_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
+  bool BallPlanner::stop_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
   {
     if (!m_activated)
       resp.message = "State machine is already inactive!";
@@ -1833,9 +1833,9 @@ namespace balloon_planner
 
   //}
 
-  /* BalloonPlanner::land_callback() method //{ */
+  /* BallPlanner::land_callback() method //{ */
 
-  bool BalloonPlanner::land_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
+  bool BallPlanner::land_callback([[maybe_unused]] std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& resp)
   {
     resp.message = "LANDING IN SATAN'S NAME!";
     m_activated = false;
@@ -1846,7 +1846,7 @@ namespace balloon_planner
 
   //}
 
-}  // namespace balloon_planner
+}  // namespace ball_planner
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(balloon_planner::BalloonPlanner, nodelet::Nodelet)
+PLUGINLIB_EXPORT_CLASS(ball_planner::BallPlanner, nodelet::Nodelet)
