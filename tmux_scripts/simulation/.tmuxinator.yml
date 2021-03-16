@@ -57,8 +57,9 @@ windows:
           export UAV_NAME=uav60;
           waitForControl;
           roslaunch ball_filter generate_eight.launch;
+          sleep 10;
           roslaunch ball_filter load_eight.launch loop:=true;
-          sleep 15;
+          sleep 10;
           roslaunch ball_filter start_following_eight.launch;
           '
   # - tf_connector:
@@ -78,7 +79,7 @@ windows:
       panes:
         - waitForControl; roslaunch ball_planner catch_eightball.launch
         - 'waitForControl; sleep 5; rosservice call /uav62/ball_planner/start_state_machine "value: 0"'
-  - mrs_status:
+  - rviz:
       layout: even-vertical
       panes:
-        - waitForControl; roslaunch mrs_status status.launch
+        - waitForControl; roslaunch ball_filter rviz.launch
