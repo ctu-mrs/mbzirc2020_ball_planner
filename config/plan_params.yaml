@@ -1,12 +1,9 @@
-land_at_end: true
-
 planning_period: 0.1 # seconds
 
 # detections and predictions older than this are ignored
 max_unseen_duration: 3.0 # seconds
 
-approach_speed: 6.0 # metres per second
-
+# parameters of the lurking spot selection and update
 lurking:
   z_offset: 0.2 # metres
   reaction_dist: 8.0 # metres - when the ball gets closer than this, start reacting to its predicted trajectory
@@ -18,17 +15,20 @@ lurking:
   land_check: true
   land_after_first_passthrough: false
 
+# parameters related to trajectory generation
 trajectory:
   sampling_dt: 0.2 # seconds
   horizon: 8.0 # seconds
   target_reached_distance: 0.5 # metre - at this distance from the target point it is considered to be reached
   default_speed: 3.0 # metres per second - used for boring maneuvres (such as from obs. pos. to lurk pos.)
 
+# height "pogoing" when waiting for the target to be first detected
 pogo:
   min_height: 8.5 # metres
   max_height: 13.0 # metres
   speed: 1.0 # metres per second
 
+# table of what dynamic constraints to apply during which state
 constraint_states:
   {
     "going_to_nextpos": "slow",
@@ -44,6 +44,7 @@ constraint_states:
     "lurking": "fast",
   }
 
+# this will be the initial observation position
 start_position:
   [
     47.0,   # x coordinate (metres)
@@ -51,14 +52,6 @@ start_position:
     10.0,   # z coordinate (metres)
     3.1416    # yaw (radians)
   ]
-
-# start_position:
-#   [
-#     0.0,   # x coordinate (metres)
-#     -20.0,  # y coordinate (metres)
-#     12.0,   # z coordinate (metres)
-#     1.57    # yaw (radians)
-#   ]
 
 landing_height: 5.5 # metres
 ## ############### NOW SPECIFIED IN THE WORLD FILE ###############

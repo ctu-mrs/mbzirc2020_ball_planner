@@ -1,5 +1,0 @@
-altitude:
-  # Covariances of measurements
-  Q:
-    height_range: [1000] # 0.04 stddev in simulation
-altitude_estimator: "BARO"

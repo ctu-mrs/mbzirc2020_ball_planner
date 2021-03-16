@@ -1,7 +1,0 @@
-mrs_collision_avoidance:
-
-  enable: true
-
-  radius: 3.0
-
-  use_priority_swap: false

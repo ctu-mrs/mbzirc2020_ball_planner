@@ -2,7 +2,7 @@ name: simulation
 root: ./
 
 startup_window: takeoff
-pre_window: export UAV_NAME=uav62; export RUN_TYPE=simulation; export WORLD_NAME=simulation_challenge1
+pre_window: r1; export UAV_NAME=uav62; export RUN_TYPE=simulation; export WORLD_NAME=simulation_challenge1
 windows:
   - roscore:
       layout: even-vertical
@@ -11,13 +11,13 @@ windows:
   - gazebo:
       layout: even-vertical
       panes:
-        - waitForRos; roslaunch ball_simulation simulation.launch
+        - waitForRos; roslaunch mrs_simulation simulation.launch
         - waitForRos; roslaunch ball_attacher attacher.launch
   - spawn:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav62; waitForSimulation; spawn 62 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ouster --ouster-model OS1-32g1 --use-gpu-ray --file spawn62.csv
-        - export UAV_NAME=uav60; waitForSimulation; spawn 60 --t650 --run --delete --enable-rangefinder --enable-ground-truth --enable-ball-holder --file spawn60.csv
+        - export UAV_NAME=uav62; waitForSimulation; rosservice call /mrs_drone_spawner/spawn "62 --t650 --enable-rangefinder --enable-ground-truth --enable-ouster --ouster-model OS1-32g1 --use-gpu-ray --pos 3 25 0.5 0"
+        - export UAV_NAME=uav60; waitForSimulation; rosservice call /mrs_drone_spawner/spawn "60 --t650 --enable-rangefinder --enable-ground-truth --enable-ouster --ouster-model OS1-32g1 --use-gpu-ray --pos -3 25 0.5 0"
   - control:
       layout: even-vertical
       panes:
